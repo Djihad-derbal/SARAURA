@@ -1,0 +1,22 @@
+id: venezuela_eq
+lens: earthquake
+name: "Venezuela earthquakes, June 24, 2026 (M7.2 + M7.5)"
+hook: "M7.5: ground shift and building damage around Caracas"
+bbox: [-67.4, 10.3, -66.4, 10.8]          # lon_min, lat_min, lon_max, lat_max
+dates: ["2026-03-01", "2026-11-12"]
+event_date: "2026-06-24"
+products: [GUNW, GCOV]
+collections: [PROVISIONAL_V1, VALIDATED_V1]
+stack: {track: 126, direction: descending, frame: 83}   # covers 100% of the site; GUNW pair 2026-06-22>07-04 spans the event
+view: 3d
+resolution_m: 30
+reference_area: [-67.05, 10.62, -67.03, 10.64]   # stable zone for GUNW referencing
+labels:
+  kind: real
+  source: "Copernicus EMS EMSR884 building damage grades (13 AOIs), aggregated to 250 m Neighborhoods"
+  notes: "Damage counts disagree between sources (about 3,000 per Copernicus/ESA vs at least 855 per OCHA)"
+model_card: earthquake
+status: prototype
+todo:
+  - "EMSR884 labels: only the Caraballeda coast (AOI12) and part of Caracas (AOI02) fall inside the bbox; 8 of 13 AOIs were not mapped (remote-sensing limits)"
+  - "REPLACE reference_area: the handoff box has almost no coherent pixels at 80 m; the pipeline falls back to the scene median until a verified stable, coherent zone is set"

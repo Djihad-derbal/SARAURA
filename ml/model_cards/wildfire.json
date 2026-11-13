@@ -1,0 +1,82 @@
+{
+  "lens": "wildfire",
+  "name": "wildfire",
+  "job": "Map burned land through smoke and cloud from the NISAR time series",
+  "user": "Post-fire emergency teams, forest managers",
+  "sites": [
+    "algeria_ne_wildfire",
+    "washington_sinlahekin_wildfire"
+  ],
+  "inputs": [
+    "hh_db",
+    "hv_db",
+    "hh_minus_median",
+    "hv_minus_median",
+    "days_since_first_pass"
+  ],
+  "outputs": [
+    {
+      "value": 0,
+      "label": "No clear change",
+      "reliable": true
+    },
+    {
+      "value": 1,
+      "label": "Burned",
+      "reliable": true
+    }
+  ],
+  "labels": {
+    "kind": "proxy",
+    "source": "Sentinel-2 burn index (dNBR >= 0.27 on vegetation), tile 32SKF",
+    "notes": "Scores measure agreement with optical labels, not field truth or official perimeters"
+  },
+  "baseline": {
+    "name": "HV drop > 1.5 dB",
+    "metric": "burned IoU",
+    "score": 0.2067
+  },
+  "model": {
+    "name": "ChangeUTAE (U-Net + temporal attention)",
+    "metric": "burned IoU",
+    "score": 0.8575,
+    "framework": "PyTorch, exported to ONNX",
+    "parameters": 477446
+  },
+  "extra_scores": [
+    {
+      "name": "Gradient-boosted trees",
+      "metric": "burned IoU",
+      "score": 0.6746
+    },
+    {
+      "name": "Change-point rules (burned + vegetation loss merged)",
+      "metric": "IoU",
+      "score": 0.3907
+    },
+    {
+      "name": "ChangeUTAE (burned + vegetation loss merged)",
+      "metric": "IoU",
+      "score": 0.8515
+    },
+    {
+      "name": "ChangeUTAE on washington_sinlahekin_wildfire, not retrained",
+      "metric": "burned IoU",
+      "score": 0.3572
+    },
+    {
+      "name": "Baseline on washington_sinlahekin_wildfire, not retrained",
+      "metric": "burned IoU",
+      "score": 0.1808
+    }
+  ],
+  "split": "Spatial blocks within one fire complex; test cells not covered by any training patch",
+  "limits": [
+    "Trained on one fire complex, one track (109 descending), ten Passes",
+    "Only 'burned' is learned; other change classes scored near zero and are not shown",
+    "On Washington (not retrained) it finds about a third of the optically burned land, but 91% of what it flags is burned; the Washington labels may also count late-summer drying of grass and shrubs as burned (dNBR from July to September), which lowers recall",
+    "Algeria's site box is larger than the training box; the edge strips are unseen ground"
+  ],
+  "status": "prototype",
+  "updated": "2026-11-13"
+}

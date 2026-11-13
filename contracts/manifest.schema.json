@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "saraura/manifest.schema.json",
+  "title": "Result manifest (data/<site_id>/manifest.json, or an Analysis result)",
+  "description": "One format for Showcase Sites and on-demand Analyses, so the frontend renders both with the same components. Written by pipeline/ (Sites) and api/ (Analyses).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "id", "bbox", "passes", "layers", "series", "generated_at"],
+  "properties": {
+    "kind": {"enum": ["showcase", "analysis"]},
+    "id": {"type": "string", "pattern": "^[a-z0-9_]{3,64}$", "description": "site_id for a Showcase Site, Analysis id otherwise"},
+    "lens": {"oneOf": [{"$ref": "site.schema.json#/$defs/lens"}, {"type": "null"}], "description": "Null for an Analysis without a Lens"},
+    "name": {"type": "string"},
+    "bbox": {"$ref": "site.schema.json#/$defs/bbox"},
+    "event_date": {"oneOf": [{"$ref": "site.schema.json#/$defs/date"}, {"type": "null"}]},
+    "view": {"enum": ["2d", "3d"]},
+    "passes": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One entry per Pass, oldest first. Each records its collection (ADR-0004) and Stack.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["date", "collection", "stack", "granules"],
+        "properties": {
+          "date": {"$ref": "site.schema.json#/$defs/date"},
+          "collection": {"enum": ["PROVISIONAL_V1", "VALIDATED_V1"]},
+          "stack": {"type": "string", "pattern": "^[0-9]{3}_[AD]_[0-9]{3}$", "description": "track_direction_frame, e.g. 109_D_070"},
+          "granules": {"type": "array", "items": {"type": "string", "pattern": "^NISAR_"}, "minItems": 1}
+        }
+      }
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "kind", "unit", "colormap", "range", "dates", "status"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9_]+$", "description": "Matches layers/<id>_<YYYY-MM-DD>.tif; predictions are pred_<lens>"},
+          "label": {"type": "string"},
+          "kind": {"enum": ["physics", "baseline", "prediction", "context"], "description": "prediction = AI Model output; only allowed when kind=showcase (ADR-0001)"},
+          "unit": {"type": "string", "description": "Shown in the legend, e.g. dB, cm, 0-1, class"},
+          "colormap": {"type": "string"},
+          "range": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+          "classes": {
+            "type": "array",
+            "description": "For categorical layers: value -> label and colour",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["value", "label", "color"],
+              "properties": {"value": {"type": "integer"}, "label": {"type": "string"}, "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"}}
+            }
+          },
+          "dates": {"type": "array", "items": {"$ref": "site.schema.json#/$defs/date"}, "minItems": 1},
+          "status": {"$ref": "site.schema.json#/$defs/status"},
+          "what_this_shows": {"type": "string", "description": "Fixed plain-language note for educators and decision-makers"}
+        }
+      }
+    },
+    "series": {
+      "type": "array",
+      "description": "Time-series parquet files (contracts/timeseries.schema.json), one per variable",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["variable", "path", "unit"],
+        "properties": {
+          "variable": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+          "path": {"type": "string", "pattern": "^series/[a-z0-9_]+\\.parquet$"},
+          "unit": {"type": "string"},
+          "grid_m": {"type": "number", "exclusiveMinimum": 0}
+        }
+      }
+    },
+    "terrain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meta", "dates"],
+      "properties": {"meta": {"const": "terrain/meta.json"}, "dates": {"type": "array", "items": {"$ref": "site.schema.json#/$defs/date"}}}
+    },
+    "insights": {"type": "array", "items": {"type": "string"}, "maxItems": 5, "description": "Rule-based plain-language findings; numbers always match the layers"},
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "passes": {"type": "integer", "minimum": 0},
+        "gaps": {"type": "array", "items": {"type": "string"}},
+        "masked_share": {"type": "number", "minimum": 0, "maximum": 1},
+        "notes": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "model_card": {"oneOf": [{"type": "string"}, {"type": "null"}], "description": "ml/model_cards/<name>.json; null for an Analysis"},
+    "generated_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "analysis"}}},
+      "then": {
+        "properties": {
+          "model_card": {"type": "null"},
+          "layers": {"items": {"properties": {"kind": {"not": {"const": "prediction"}}}}}
+        }
+      }
+    }
+  ]
+}

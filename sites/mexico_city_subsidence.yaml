@@ -1,0 +1,19 @@
+id: mexico_city_subsidence
+lens: subsidence
+name: "Mexico City ground subsidence, 2026"
+hook: "Parts of the city sink more than 2 cm a month"
+bbox: [-99.30, 19.20, -98.90, 19.60]
+dates: ["2025-11-01", "2026-11-12"]
+products: [GUNW]
+collections: [PROVISIONAL_V1, VALIDATED_V1]
+view: 3d
+resolution_m: 30
+reference_area: [-99.27, 19.38, -99.25, 19.40]   # western hills on volcanic rock
+labels:
+  kind: self_supervised
+  source: "The GUNW time series itself: the last 1 to 3 Passes are held out as the forecast test"
+model_card: subsidence
+status: prototype
+todo:
+  - "Verify reference_area sits on stable bedrock outside the lake-clay zone"
+  - "Check for a broken chain of consecutive GUNW pairs"

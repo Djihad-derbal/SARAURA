@@ -1,0 +1,21 @@
+id: kamchatka_volcano
+lens: volcano
+name: "Krasheninnikov lava flows, Kamchatka, 2026"
+hook: "Fresh lava tracked through cloud, Pass by Pass"
+bbox: [159.95, 54.40, 160.60, 54.80]
+dates: ["2025-11-01", "2026-11-12"]
+products: [GCOV, GUNW]
+collections: [PROVISIONAL_V1, VALIDATED_V1]   # calibrated collections at any date (ADR-0004); BETA excluded
+view: 3d
+resolution_m: 30
+reference_area: [160.45, 54.70, 160.50, 54.73]
+labels:
+  kind: proxy
+  source: "Lava extent hand-digitised from clear Sentinel-2 dates"
+  notes: "No published lava outlines found (no Copernicus EMS activation; KVERT notices are text only)"
+model_card: volcano
+status: prototype
+todo:
+  - "Verify bbox centres on the 2026 flows (volcano at about 54.59 N, 160.27 E)"
+  - "Pick a reference_area on old, stable terrain away from the edifice"
+  - "Count calibrated Passes per Stack; winter snow from October may affect coherence"

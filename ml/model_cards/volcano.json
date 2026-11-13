@@ -1,0 +1,102 @@
+{
+  "lens": "volcano",
+  "name": "volcano",
+  "job": "Map where new lava went during the NISAR window, through cloud and the long Kamchatka nights",
+  "user": "Volcano observatories (KVERT) and aviation and hazard teams",
+  "sites": [
+    "kamchatka_volcano"
+  ],
+  "inputs": [
+    "dhh_absmax",
+    "dhv_absmax",
+    "dhh_abssum",
+    "dhv_abssum",
+    "hh_last_minus_first",
+    "hv_last_minus_first",
+    "hh_mean",
+    "hv_mean",
+    "hh_std",
+    "coherence_min",
+    "coherence_mean",
+    "slope"
+  ],
+  "outputs": [
+    {
+      "value": 0,
+      "label": "No new lava",
+      "reliable": true
+    },
+    {
+      "value": 1,
+      "label": "New lava",
+      "reliable": true
+    }
+  ],
+  "labels": {
+    "kind": "proxy",
+    "source": "Sentinel-2 hot spots (NHI_SWIR > 0 with bright B12, within 10 km of the vent, hot on 3+ scenes; Marchese et al. 2019) on 31 scenes, 2026-06-18 to 2026-10-28",
+    "notes": "Hot spots mark active flows and channels; cooled lobes that were never seen hot through cloud are labelled 'no new lava'"
+  },
+  "baseline": {
+    "name": "Largest HH change between Passes",
+    "metric": "average precision",
+    "score": 0.0031
+  },
+  "model": {
+    "name": "LightGBM on per-pixel radar change statistics",
+    "metric": "average precision",
+    "score": 0.0725,
+    "framework": "LightGBM"
+  },
+  "extra_scores": [
+    {
+      "name": "Model, best threshold",
+      "metric": "lava IoU",
+      "score": 0.1045
+    },
+    {
+      "name": "Baseline, best threshold",
+      "metric": "lava IoU",
+      "score": 0.0047
+    },
+    {
+      "name": "Baseline at 3 dB",
+      "metric": "lava IoU",
+      "score": 0.003
+    },
+    {
+      "name": "Chance (share of lava pixels)",
+      "metric": "average precision",
+      "score": 0.0026
+    },
+    {
+      "name": "Model precision",
+      "metric": "precision",
+      "score": 0.1979
+    },
+    {
+      "name": "Model recall",
+      "metric": "recall",
+      "score": 0.1813
+    },
+    {
+      "name": "Baseline precision",
+      "metric": "precision",
+      "score": 0.0049
+    },
+    {
+      "name": "Baseline recall",
+      "metric": "recall",
+      "score": 0.097
+    }
+  ],
+  "split": "Spatial 5-fold cross-validation over 1.5 km blocks in a 30 km window around the vent",
+  "limits": [
+    "One volcano and one lava field; few independent blocks contain lava, so scores are noisy",
+    "Labels mark heat, not the full outline of cooled lava",
+    "Snow from October changes backscatter and coherence and can look like change",
+    "Ionosphere residuals are larger at this latitude (ASF known issues)"
+  ],
+  "status": "prototype",
+  "updated": "2026-11-13"
+}

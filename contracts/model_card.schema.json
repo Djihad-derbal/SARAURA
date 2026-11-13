@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "saraura/model_card.schema.json",
+  "title": "Model card (ml/model_cards/<name>.json)",
+  "description": "Written by ml/, read by api/ and the Model card page. A Model plugs into the app only through this card plus pred_<lens>_<date>.tif layers (ADR-0005).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lens",
+    "name",
+    "job",
+    "user",
+    "sites",
+    "inputs",
+    "labels",
+    "baseline",
+    "model",
+    "split",
+    "limits",
+    "status"
+  ],
+  "properties": {
+    "lens": {
+      "$ref": "site.schema.json#/$defs/lens"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z_]+$",
+      "description": "File name without .json"
+    },
+    "job": {
+      "type": "string"
+    },
+    "user": {
+      "type": "string"
+    },
+    "sites": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "Showcase Site ids the Model was trained or tested on"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "outputs": {
+      "type": "array",
+      "description": "Prediction classes or quantities written to pred_<lens>_<date>.tif",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "value",
+          "label"
+        ],
+        "properties": {
+          "value": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "reliable": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "real",
+            "proxy",
+            "self_supervised"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "baseline": {
+      "$ref": "#/$defs/score"
+    },
+    "model": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/score"
+        }
+      ],
+      "properties": {
+        "framework": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "integer"
+        }
+      }
+    },
+    "extra_scores": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/score"
+      }
+    },
+    "split": {
+      "type": "string"
+    },
+    "limits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "status": {
+      "$ref": "site.schema.json#/$defs/status"
+    },
+    "updated": {
+      "$ref": "site.schema.json#/$defs/date"
+    },
+    "prediction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "colormap",
+        "range"
+      ],
+      "description": "For a Model whose pred_<lens>_<date>.tif holds a quantity (e.g. a forecast in cm) instead of classes",
+      "properties": {
+        "unit": {
+          "type": "string"
+        },
+        "colormap": {
+          "type": "string"
+        },
+        "range": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "label": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "score": {
+      "type": "object",
+      "required": [
+        "name",
+        "metric",
+        "score"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "metric": {
+          "type": "string"
+        },
+        "score": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null until evaluated"
+        },
+        "framework": {
+          "type": "string"
+        },
+        "parameters": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+id: midwest_farming
+lens: farming
+name: "Central Iowa maize and soybean season, 2026"
+hook: "Crop type told apart before harvest"
+bbox: [-93.90, 41.85, -93.40, 42.20]
+dates: ["2026-04-15", "2026-11-12"]
+products: [GCOV]
+collections: [PROVISIONAL_V1, VALIDATED_V1]
+view: 2d
+resolution_m: 20
+labels:
+  kind: proxy
+  source: "USDA Cropland Data Layer 2024 + 2025 with a maize/soybean rotation rule (CDL 2026 not published as of 2026-11-13)"
+model_card: farming
+status: prototype
+todo:
+  - "Rerun ml/farming.py with real CDL 2026 labels when USDA publishes it"
+  - "Check Pass count per Stack; planting was in May, before the calibrated window"

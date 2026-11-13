@@ -1,0 +1,20 @@
+id: washington_sinlahekin_wildfire
+lens: wildfire
+name: "Sinlahekin Fire, Washington, July to September 2026"
+hook: "About 670 km² of conifer forest burned near Tonasket"
+bbox: [-120.05, 48.45, -119.45, 48.95]
+dates: ["2026-05-01", "2026-11-12"]
+event_date: "2026-07-26"        # lightning ignition; grew to about 166,000 acres by late August
+event_end_date: "2026-09-01"    # about 166,000 acres by 31 August; little growth after (verify containment date)
+products: [GCOV]
+collections: [PROVISIONAL_V1, VALIDATED_V1]
+view: 2d
+resolution_m: 20
+labels:
+  kind: proxy
+  source: "Sentinel-2 dNBR on clear dates, checked against NIFC/InciWeb fire perimeters"
+model_card: wildfire
+status: prototype
+todo:
+  - "Fit bbox to the official perimeter (fire in the Sinlahekin Valley, about 12 miles west of Tonasket)"
+  - "Ignition falls one day before the 27 July to 10 August instrument gap, and the fire grew for weeks: pick the post-fire window after it stopped growing (September)"

@@ -1,0 +1,29 @@
+# Secrets: never commit
+.env
+.env.*
+!.env.example
+.netrc
+_netrc
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+.next/
+
+# Downloaded or cached radar data
+cache/
+data/
+*.h5
+passes.json
+
+# Training outputs (the exported model in models/ is kept)
+ml/runs/
+
+# Local tool state
+.claude/
+.pytest_cache/

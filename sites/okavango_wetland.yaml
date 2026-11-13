@@ -1,0 +1,19 @@
+id: okavango_wetland
+lens: wetland
+name: "Okavango Delta flood pulse, 2026"
+hook: "Water spreading under the reeds, seen by radar"
+bbox: [22.30, -19.70, 23.30, -18.80]
+dates: ["2026-03-01", "2026-11-12"]
+products: [GCOV, GUNW]
+collections: [PROVISIONAL_V1, VALIDATED_V1]
+stack: {track: 172, direction: ascending, frame: 168}   # 98% coverage; GCOV 10 Passes and GUNW 8 pairs on one geometry
+view: 2d
+resolution_m: 40
+labels:
+  kind: proxy
+  source: "Open water from Sentinel-2 water index on clear dates, plus hand-digitised flooded vegetation"
+model_card: wetland
+status: prototype
+todo:
+  - "Check Pass count per Stack over the delta"
+  - "The flood pulse peaks about June to August and recedes through November; confirm in the backscatter"

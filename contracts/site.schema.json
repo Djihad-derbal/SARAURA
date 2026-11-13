@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "saraura/site.schema.json",
+  "title": "Showcase Site config (sites/<id>.yaml)",
+  "description": "One curated place that demonstrates one Lens. Read by pipeline/, api/ and frontend/. Cross-field rules (bbox order, dates inside the calibrated window, reference_area inside bbox) are checked by contracts/validate.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "lens",
+    "name",
+    "bbox",
+    "dates",
+    "products",
+    "collections",
+    "view",
+    "resolution_m",
+    "labels",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,40}$",
+      "description": "Must equal the file name without .yaml"
+    },
+    "lens": {
+      "$ref": "#/$defs/lens"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 120
+    },
+    "hook": {
+      "type": "string",
+      "maxLength": 90,
+      "description": "One line on the globe marker, e.g. 'M7.5, up to 1 m of ground shift'"
+    },
+    "bbox": {
+      "$ref": "#/$defs/bbox"
+    },
+    "dates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/date"
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[start, end] of the Passes to process"
+    },
+    "event_date": {
+      "$ref": "#/$defs/date"
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "GCOV",
+          "GUNW",
+          "SME2"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "collections": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "PROVISIONAL_V1",
+          "VALIDATED_V1"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Calibrated collections only; BETA is never allowed (ADR-0004)"
+    },
+    "stack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "track",
+        "direction"
+      ],
+      "description": "Preferred Stack. Omit to let the pipeline pick the Stack with the most Passes.",
+      "properties": {
+        "track": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 173
+        },
+        "direction": {
+          "enum": [
+            "ascending",
+            "descending"
+          ]
+        },
+        "frame": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "view": {
+      "enum": [
+        "2d",
+        "3d"
+      ]
+    },
+    "resolution_m": {
+      "type": "integer",
+      "enum": [
+        10,
+        20,
+        30,
+        40,
+        80,
+        100
+      ]
+    },
+    "reference_area": {
+      "$ref": "#/$defs/bbox",
+      "description": "Stable zone for referencing GUNW displacement. Required for the displacement Lenses (earthquake, volcano, subsidence)."
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "real",
+            "proxy",
+            "self_supervised"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 3
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "model_card": {
+      "type": "string",
+      "pattern": "^[a-z_]+$",
+      "description": "Name of ml/model_cards/<name>.json; defaults to the lens"
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "todo": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Facts still to verify before the pipeline run"
+    },
+    "event_end_date": {
+      "$ref": "#/$defs/date",
+      "description": "When the event stopped growing (e.g. a fire's containment). Change layers compare against Passes after this date; defaults to event_date."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "lens": {
+            "enum": [
+              "earthquake",
+              "volcano",
+              "subsidence"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reference_area"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "lens": {
+      "enum": [
+        "earthquake",
+        "volcano",
+        "subsidence",
+        "wildfire",
+        "wetland",
+        "farming"
+      ]
+    },
+    "bbox": {
+      "type": "array",
+      "description": "[lon_min, lat_min, lon_max, lat_max] in degrees (EPSG:4326)",
+      "prefixItems": [
+        {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "status": {
+      "enum": [
+        "operational",
+        "prototype"
+      ]
+    }
+  }
+}

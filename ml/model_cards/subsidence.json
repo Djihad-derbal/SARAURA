@@ -1,0 +1,90 @@
+{
+  "lens": "subsidence",
+  "name": "subsidence",
+  "job": "Forecast how far each spot will have sunk at the next NISAR Pass",
+  "user": "City water and infrastructure planners watching where the ground sinks fastest",
+  "sites": [
+    "mexico_city_subsidence"
+  ],
+  "inputs": [
+    "trend_last6_minus_line",
+    "trend_last9_minus_line",
+    "trend_last12_minus_line",
+    "last3_off_line",
+    "last_off_line",
+    "horizon_days",
+    "coherence_mean"
+  ],
+  "prediction": {
+    "unit": "cm",
+    "colormap": "rdbu",
+    "range": [
+      -15,
+      15
+    ],
+    "label": "AI forecast: cumulative displacement on 2026-10-25"
+  },
+  "labels": {
+    "kind": "self_supervised",
+    "source": "The site's own GUNW time series; Passes 2026-09-19, 2026-10-01, 2026-10-13 held out",
+    "notes": "Scores measure how well the next Passes are forecast, not ground truth from levelling or GNSS"
+  },
+  "baseline": {
+    "name": "Straight-line extrapolation of each pixel's history",
+    "metric": "RMSE, cm (3 held-out Passes)",
+    "score": 1.088
+  },
+  "model": {
+    "name": "LightGBM correction of the straight line",
+    "metric": "RMSE, cm (3 held-out Passes)",
+    "score": 1.203,
+    "framework": "LightGBM"
+  },
+  "extra_scores": [
+    {
+      "name": "Model, +1 Pass, fastest-sinking 10%",
+      "metric": "RMSE, cm",
+      "score": 1.304
+    },
+    {
+      "name": "Baseline, +1 Pass, fastest-sinking 10%",
+      "metric": "RMSE, cm",
+      "score": 1.041
+    },
+    {
+      "name": "Model, +2 Pass, fastest-sinking 10%",
+      "metric": "RMSE, cm",
+      "score": 1.596
+    },
+    {
+      "name": "Baseline, +2 Pass, fastest-sinking 10%",
+      "metric": "RMSE, cm",
+      "score": 1.325
+    },
+    {
+      "name": "Model, +3 Pass, fastest-sinking 10%",
+      "metric": "RMSE, cm",
+      "score": 1.067
+    },
+    {
+      "name": "Baseline, +3 Pass, fastest-sinking 10%",
+      "metric": "RMSE, cm",
+      "score": 1.025
+    },
+    {
+      "name": "No change (last value)",
+      "metric": "RMSE, cm (+1 Pass)",
+      "score": 0.789
+    }
+  ],
+  "split": "Time split: trained on forecasts ending by 2026-09-07, tested on the next 3 Passes; validation origin 2026-07-21 (Model 0.767 cm, Baseline 0.751 cm)",
+  "limits": [
+    "Does not beat the straight-line Baseline: use the Baseline forecast; the Model is shown for transparency",
+    "Under one year of data, so seasonal swings (groundwater pumping, rain) cannot be learned",
+    "Errors include the atmospheric noise of each interferogram, which no forecast can predict",
+    "Line-of-sight displacement only; vertical sinking is assumed to dominate in Mexico City",
+    "The displacement sign (toward or away from the satellite) is our reading of the product; ASF has not yet confirmed it"
+  ],
+  "status": "prototype",
+  "updated": "2026-11-13"
+}

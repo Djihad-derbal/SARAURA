@@ -1,0 +1,20 @@
+id: algeria_ne_wildfire
+lens: wildfire
+name: "North-east Algeria wildfires, August 2026 (Jijel)"
+hook: "Burn scars mapped through smoke, near Jijel"
+bbox: [5.6, 36.55, 6.5, 36.95]
+dates: ["2026-06-17", "2026-11-12"]
+event_date: "2026-08-26"        # fires 26 to 30 Aug, peak 28 Aug (civil protection)
+products: [GCOV]
+collections: [PROVISIONAL_V1, VALIDATED_V1]
+stack: {track: 109, direction: descending, frame: 70}
+view: 2d
+resolution_m: 20
+labels:
+  kind: proxy
+  source: "Sentinel-2 dNBR >= 0.27 on vegetation, tile 32SKF"
+  notes: "Same labels the trained ChangeUTAE used (ml/README.md)"
+model_card: wildfire
+status: prototype
+todo:
+  - "Check against FIRMS detections and official perimeters"

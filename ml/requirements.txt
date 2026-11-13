@@ -1,0 +1,14 @@
+# Training environment. Install PyTorch first, matching your hardware:
+#   GPU (NVIDIA, CUDA 12.x):  pip install torch --index-url https://download.pytorch.org/whl/cu126
+#   CPU only:                 pip install torch --index-url https://download.pytorch.org/whl/cpu
+numpy>=2.1
+scikit-learn>=1.5
+onnx>=1.17
+onnxruntime>=1.20
+# Sentinel-2 labels
+rasterio>=1.4
+pystac-client>=0.8
+# The backend reader is reused for radar data
+-r ../requirements.txt
+# Earthquake damage model
+lightgbm>=4.5

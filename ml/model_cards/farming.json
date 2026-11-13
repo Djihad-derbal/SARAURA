@@ -1,0 +1,91 @@
+{
+  "lens": "farming",
+  "name": "farming",
+  "job": "Map maize, soybean and other land from the NISAR season, before the official crop map is out",
+  "user": "Crop analysts and agricultural agencies who need the crop map months before USDA publishes it",
+  "sites": [
+    "midwest_farming"
+  ],
+  "inputs": [
+    "hh_db, hv_db, HV/HH for every Pass",
+    "hv_mean",
+    "hv_std",
+    "hv_cv",
+    "hv_range",
+    "hv_peak_pass"
+  ],
+  "outputs": [
+    {
+      "value": 0,
+      "label": "Other",
+      "reliable": true
+    },
+    {
+      "value": 1,
+      "label": "Maize",
+      "reliable": true
+    },
+    {
+      "value": 2,
+      "label": "Soybean",
+      "reliable": true
+    }
+  ],
+  "labels": {
+    "kind": "proxy",
+    "source": "USDA Cropland Data Layer 2024 + 2025 (Iowa) with a maize/soybean rotation rule, because CDL 2026 is not published yet",
+    "notes": "The rule was 86% right when tested on 2025 from 2023 + 2024, so about 1 label in 7 is wrong; scores are capped by that"
+  },
+  "baseline": {
+    "name": "HV coefficient-of-variation rule (crop vs other; crops called the more common crop)",
+    "metric": "macro F1",
+    "score": 0.5341
+  },
+  "model": {
+    "name": "LightGBM on the per-pixel Pass series",
+    "metric": "macro F1",
+    "score": 0.8582,
+    "framework": "LightGBM"
+  },
+  "extra_scores": [
+    {
+      "name": "Model, Passes up to 2026-08-31 only (before harvest)",
+      "metric": "macro F1",
+      "score": 0.8524
+    },
+    {
+      "name": "Model accuracy",
+      "metric": "accuracy",
+      "score": 0.856
+    },
+    {
+      "name": "Baseline accuracy",
+      "metric": "accuracy",
+      "score": 0.6552
+    },
+    {
+      "name": "Model F1, Other",
+      "metric": "F1",
+      "score": 0.9472
+    },
+    {
+      "name": "Model F1, Maize",
+      "metric": "F1",
+      "score": 0.8393
+    },
+    {
+      "name": "Model F1, Soybean",
+      "metric": "F1",
+      "score": 0.788
+    }
+  ],
+  "split": "Spatial 5-fold cross-validation over 2 km blocks; scores are out-of-fold",
+  "limits": [
+    "Labels are a rotation-rule guess, not the 2026 crop map; rerun when USDA publishes CDL 2026 (usually early in the following year)",
+    "Fields that broke the rotation in 2026 are labelled wrongly",
+    "One county-sized area of central Iowa; other regions grow different crop mixes",
+    "Per-pixel at 20 m, so field edges are noisy"
+  ],
+  "status": "prototype",
+  "updated": "2026-11-13"
+}

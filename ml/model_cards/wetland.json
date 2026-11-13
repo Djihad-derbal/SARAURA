@@ -1,0 +1,88 @@
+{
+  "lens": "wetland",
+  "name": "wetland",
+  "job": "Map open water on every NISAR Pass across the delta, through cloud and day or night",
+  "user": "Wetland managers and water authorities tracking the yearly flood pulse",
+  "sites": [
+    "okavango_wetland"
+  ],
+  "inputs": [
+    "hh_db",
+    "hv_db",
+    "hvhh_db",
+    "dhh",
+    "dhv",
+    "hh_season_mean",
+    "hh_season_min",
+    "hv_season_mean",
+    "hv_season_min"
+  ],
+  "outputs": [
+    {
+      "value": 0,
+      "label": "Dry land",
+      "reliable": true
+    },
+    {
+      "value": 1,
+      "label": "Open water",
+      "reliable": true
+    }
+  ],
+  "labels": {
+    "kind": "proxy",
+    "source": "Sentinel-2 water index (MNDWI > 0) within 4 days of the Passes 2026-07-08, 2026-09-06, 2026-10-24",
+    "notes": "Optical labels miss water under vegetation and count it as dry land"
+  },
+  "baseline": {
+    "name": "Otsu threshold on HH, per Pass",
+    "metric": "open-water IoU",
+    "score": 0.4667
+  },
+  "model": {
+    "name": "LightGBM on per-Pass backscatter and season statistics",
+    "metric": "open-water IoU",
+    "score": 0.6328,
+    "framework": "LightGBM"
+  },
+  "extra_scores": [
+    {
+      "name": "Model on 2026-07-08",
+      "metric": "open-water IoU",
+      "score": 0.538
+    },
+    {
+      "name": "Baseline on 2026-07-08",
+      "metric": "open-water IoU",
+      "score": 0.4155
+    },
+    {
+      "name": "Model on 2026-09-06",
+      "metric": "open-water IoU",
+      "score": 0.7287
+    },
+    {
+      "name": "Baseline on 2026-09-06",
+      "metric": "open-water IoU",
+      "score": 0.6526
+    },
+    {
+      "name": "Model on 2026-10-24",
+      "metric": "open-water IoU",
+      "score": 0.5131
+    },
+    {
+      "name": "Baseline on 2026-10-24",
+      "metric": "open-water IoU",
+      "score": 0.2491
+    }
+  ],
+  "split": "Spatial 5-fold cross-validation over 5 km blocks, label dates pooled; water and land sampled about equally",
+  "limits": [
+    "Open water only: water under reeds and papyrus (flooded vegetation) is not learned, because optical labels cannot see it",
+    "Wind-roughened water is bright and can be missed",
+    "Scores use balanced samples; on the whole delta, where water is rarer, IoU is lower"
+  ],
+  "status": "prototype",
+  "updated": "2026-11-13"
+}

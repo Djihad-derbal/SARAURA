@@ -1,0 +1,97 @@
+{
+  "lens": "earthquake",
+  "name": "earthquake",
+  "job": "Rank 250 m Neighborhoods by the chance that buildings were damaged, from NISAR coherence, displacement and backscatter change",
+  "user": "Search-and-rescue and damage-assessment teams deciding where to look first",
+  "sites": [
+    "venezuela_eq"
+  ],
+  "inputs": [
+    "coherence_pre",
+    "coherence_co",
+    "coherence_post",
+    "coherence_co_min",
+    "coherence_loss",
+    "coherence_loss_max",
+    "coherence_recovery",
+    "hh_db_pre",
+    "hv_db_pre",
+    "hvhh_db_pre",
+    "hh_db_pre_max",
+    "dhh_event",
+    "dhh_event_min",
+    "dhv_event",
+    "dhv_event_min",
+    "slope"
+  ],
+  "outputs": [
+    {
+      "value": 0,
+      "label": "Low damage likelihood",
+      "reliable": true
+    },
+    {
+      "value": 1,
+      "label": "Elevated damage likelihood",
+      "reliable": true
+    },
+    {
+      "value": 2,
+      "label": "High damage likelihood",
+      "reliable": true
+    }
+  ],
+  "labels": {
+    "kind": "real",
+    "source": "Copernicus EMS EMSR884 building damage grades: EMSR884_AOI02_GRA_MONIT01_v2, EMSR884_AOI02_GRA_PRODUCT_v1, EMSR884_AOI12_GRA_MONIT01_v3, EMSR884_AOI12_GRA_MONIT02_v1, EMSR884_AOI12_GRA_PRODUCT_v2",
+    "notes": "Positive = any building graded Damaged or Destroyed. Neighborhoods with only 'Possibly damaged' buildings are left out. Negatives are analysed areas with no graded building, which includes empty land."
+  },
+  "baseline": {
+    "name": "Mean coherence loss across the event (best threshold)",
+    "metric": "average precision",
+    "score": 0.4254
+  },
+  "model": {
+    "name": "LightGBM on per-Neighborhood radar features",
+    "metric": "average precision (mean of 5 block layouts)",
+    "score": 0.4984,
+    "framework": "LightGBM"
+  },
+  "extra_scores": [
+    {
+      "name": "Model, worst block layout",
+      "metric": "average precision",
+      "score": 0.4323
+    },
+    {
+      "name": "Model, best block layout",
+      "metric": "average precision",
+      "score": 0.5649
+    },
+    {
+      "name": "Model, best F1",
+      "metric": "F1",
+      "score": 0.4841
+    },
+    {
+      "name": "Baseline, best F1",
+      "metric": "F1",
+      "score": 0.4337
+    },
+    {
+      "name": "Chance (share of damaged Neighborhoods)",
+      "metric": "average precision",
+      "score": 0.0967
+    }
+  ],
+  "split": "Spatial 5-fold cross-validation over 5 km blocks (142 damaged, 1327 undamaged Neighborhoods); scores are out-of-fold",
+  "limits": [
+    "Labels cover only the Caraballeda coast and part of Caracas; elsewhere in the site the map is an extrapolation",
+    "Copernicus mapped damage from optical imagery; buildings hidden by roofs or cloud are missed, so some 'undamaged' Neighborhoods are not",
+    "NISAR coherence is 80 m, coarser than single buildings: the Model finds damaged areas, not damaged buildings",
+    "One earthquake, one track (126 descending)",
+    "Only 142 damaged Neighborhoods: scores move by about 0.1 between block layouts, so the gain over the Baseline is modest"
+  ],
+  "status": "prototype",
+  "updated": "2026-11-13"
+}
