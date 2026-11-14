@@ -1,6 +1,6 @@
 "use client";
 
-import { useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -10,6 +10,7 @@ import {
   downloadReport,
   fetchAreaSeries,
   fetchAssistantStatus,
+  fetchFeatures,
   fetchManifest,
   fetchPointSeries,
   fetchStats,
@@ -23,18 +24,21 @@ import {
   type GeoPolygon,
   type LayerInfo,
   type LayerStats,
+  type AnswerFeatures,
   type Manifest,
+  type Question,
   type TerrainMeta,
   type Timeseries,
 } from "@/lib/api";
 import { KIND_LABEL, LENSES, defaultLayer, defaultSeries, fmt, gradient, groupNotes, ha } from "@/lib/style";
 import ResearchPlots from "@/components/research/ResearchPlots";
 import { addDays, modisTrueColor } from "@/lib/gibs";
+import AskPanel, { PlaceSearch, SpotBubble, useAnswers } from "./AskPanel";
 import StudyMap from "./StudyMap";
 
 const Terrain3D = dynamic(() => import("./Terrain3D"), { ssr: false, loading: () => <div className="h-full w-full bg-bg" aria-busy /> });
 
-const KIND_ORDER: LayerInfo["kind"][] = ["prediction", "baseline", "physics", "context"];
+const KIND_ORDER: LayerInfo["kind"][] = ["answer", "prediction", "baseline", "physics", "context"];
 const SERIES_LABEL: Record<string, string> = { hv_db: "Vegetation scattering (HV)", hh_db: "Surface scattering (HH)", cum_disp_cm: "Ground motion since the first Pass (line of sight)" };
 
 function nearest(dates: string[], d: string) {
@@ -187,12 +191,16 @@ function Assistant({ m, layer, date }: { m: Manifest; layer: LayerInfo; date: st
   );
 }
 
-export default function StudyPage({ id }: { id: string }) {
+type Tab = "ask" | "layers" | "more";
+
+/** "place": the decision view of a place (map and questions only). "research": layers, charts and data first. */
+export default function StudyPage({ id, mode = "research" }: { id: string; mode?: "place" | "research" }) {
+  const place = mode === "place";
   const reduced = useReducedMotion() ?? false;
   const [m, setM] = useState<Manifest | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [layerId, setLayerId] = useState<string | null>(null);
-  const [date, setDate] = useState<string | null>(null);
+  const [dateSel, setDate] = useState<string | null>(null);
   const [opacity, setOpacity] = useState(0.85);
   const [compare, setCompare] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -209,6 +217,22 @@ export default function StudyPage({ id }: { id: string }) {
   const [drape, setDrape] = useState(false); // displacement colours by default; the drape is an option
   const [reportBusy, setReportBusy] = useState(false);
   const [reportErr, setReportErr] = useState<string | null>(null);
+  // Questions and answers: the panel is controlled from here so the map (bubble, drawn items) follows it.
+  const answers = useAnswers(id, probe);
+  const doc = answers.doc;
+  const [tabSel, setTabSel] = useState<Tab | null>(null);
+  // ?role=&q= make a place view shareable ("the home buyer's view of this question").
+  const [initial] = useState(() => {
+    const p = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+    return { role: p.get("role"), q: p.get("q") };
+  });
+  const [role, setRole] = useState<string | null>(initial.role ?? (place ? null : "all")); // null: not chosen yet
+  const [openSel, setOpenSel] = useState<string | null | undefined>(initial.q ?? undefined); // undefined: the first question
+  const [layerTouched, setLayerTouched] = useState(false);
+  const [focus, setFocus] = useState<{ lon: number; lat: number; zoom: number; key: number } | null>(null);
+  const [scrollKey, setScrollKey] = useState(0);
+  const [featRes, setFeatRes] = useState<{ key: string; fc: AnswerFeatures } | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false); // phones only; always shown from the sm breakpoint
 
   useEffect(() => {
     const ctl = new AbortController();
@@ -225,8 +249,33 @@ export default function StudyPage({ id }: { id: string }) {
     return () => ctl.abort();
   }, [id]);
 
-  const layer = m?.layers.find((l) => l.id === layerId) ?? null;
+  const openId = openSel === undefined ? (doc?.questions[0]?.id ?? null) : openSel;
+  const openQ: Question | null = doc?.questions.find((q) => q.id === openId) ?? null;
+  const tab: Tab = place ? "ask" : (tabSel ?? "layers");
+  const asking = !!doc && (place || tab === "ask"); // the map follows the questions
+  const autoLayer = asking && !layerTouched && openQ?.layer ? openQ.layer : null;
+  const layer = m?.layers.find((l) => l.id === (autoLayer ?? layerId)) ?? m?.layers.find((l) => l.id === layerId) ?? null;
+  // The open question's answer map has its own (single) date; show the nearest date the layer has.
+  const date = layer && dateSel ? (layer.dates.includes(dateSel) ? dateSel : nearest(layer.dates, dateSel)) : dateSel;
   const hasTerrain = !!m?.terrain;
+
+  useEffect(() => {
+    if (!place) return;
+    const p = new URLSearchParams();
+    if (role && role !== "all") p.set("role", role);
+    if (openId) p.set("q", openId);
+    const qs = p.toString();
+    window.history.replaceState(window.history.state, "", qs ? `?${qs}` : window.location.pathname);
+  }, [place, role, openId]);
+
+  const featKey = openQ?.features ? `${id}|${openQ.id}` : null;
+  useEffect(() => {
+    if (!featKey || !openQ) return;
+    const ctl = new AbortController();
+    fetchFeatures(id, openQ.id, ctl.signal).then((fc) => setFeatRes({ key: featKey, fc })).catch(() => {});
+    return () => ctl.abort();
+  }, [id, featKey, openQ]);
+  const features = asking && featKey && featRes?.key === featKey && layer?.id === openQ?.layer ? featRes.fc : null;
 
   useEffect(() => {
     if (!hasTerrain) return;
@@ -267,6 +316,7 @@ export default function StudyPage({ id }: { id: string }) {
   }, [playing, layer]);
 
   const chooseLayer = useCallback((l: LayerInfo) => {
+    setLayerTouched(true); // a layer picked by hand wins over the open question's map
     setLayerId(l.id);
     setDate((d) => nearest(l.dates, d ?? l.dates[l.dates.length - 1]));
     setCompare(null);
@@ -283,10 +333,24 @@ export default function StudyPage({ id }: { id: string }) {
       <main className="grid h-dvh place-items-center bg-bg p-6 text-center">
         <div>
           <p className="text-ink">{error}</p>
-          <Link href="/" className="mt-3 inline-block text-accent underline underline-offset-2">Back to the globe</Link>
+          <Link href="/" className="mt-3 inline-block text-accent underline underline-offset-2">Back to all places</Link>
         </div>
       </main>
     );
+  const goTo = (s: { lon: number; lat: number }, zoom = 13) => {
+    setProbe(s);
+    setFocus({ ...s, zoom, key: Date.now() });
+  };
+  const openQuestion = (q: Question | null) => {
+    setOpenSel(q ? q.id : null);
+    const l = q?.layer ? m?.layers.find((x) => x.id === q.layer) : null;
+    if (l) {
+      chooseLayer(l);
+      setLayerTouched(false);
+      setView3d(false);
+    }
+  };
+
   if (!m || !layer || !date)
     return (
       <main className="grid h-dvh place-items-center bg-bg" aria-busy="true">
@@ -303,15 +367,51 @@ export default function StudyPage({ id }: { id: string }) {
 
   return (
     <main className="flex h-dvh w-full flex-col bg-bg md:flex-row">
-      <div className="relative h-[52dvh] shrink-0 md:h-full md:flex-1">
+      <div className="relative h-[52dvh] shrink-0 overflow-hidden md:h-full md:flex-1">
         {view3d && meta ? (
           <Terrain3D studyId={id} meta={meta} date={date3d} drapeUrl={drape ? layerPreviewUrl(id, layer.id, date, 1536) : null} k={k} kd={kd} onPick={(lon, lat) => setProbe({ lon, lat })} reduced={reduced} />
         ) : (
-          <StudyMap studyId={id} bbox={m.bbox} layerId={layer.id} date={date} opacity={opacity} compareDate={compare} probe={probe} onPick={(lon, lat) => setProbe({ lon, lat })} terrain={terrain} />
+          <StudyMap studyId={id} bbox={m.bbox} layerId={layer.id} date={date} opacity={opacity} compareDate={compare} probe={probe}
+            onPick={(lon, lat) => setProbe({ lon, lat })} terrain={terrain}
+            features={features} hideRaster={!!features && openQ?.features === "lines"} focus={focus}
+            popup={asking && probe ? (
+              <SpotBubble spot={answers.spot} busy={answers.spotBusy} err={answers.spotErr} openId={openId}
+                onDetails={() => { setTabSel("ask"); setScrollKey((k) => k + 1); }} onClose={() => setProbe(null)} />
+            ) : null} />
+        )}
+
+        {!view3d && (
+          <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex flex-col gap-2 sm:inset-x-3 sm:top-3 md:right-auto md:w-[360px]">
+            <div className="pointer-events-auto flex gap-2">
+              {asking && (
+                <div className="min-w-0 flex-1">
+                  <PlaceSearch studyId={id} placeholder={m.lens === "subsidence" ? "Find your neighbourhood…" : "Find a village or town…"} onPick={(p) => goTo(p)} />
+                </div>
+              )}
+              <button type="button" onClick={() => setLegendOpen((v) => !v)} aria-expanded={legendOpen} aria-controls="map-legend"
+                className={`panel h-11 shrink-0 cursor-pointer px-3 text-xs text-ink-2 sm:hidden ${asking ? "" : "ml-auto"}`}>
+                Key {legendOpen ? "▴" : "▾"}
+              </button>
+            </div>
+            <div id="map-legend" className={`panel pointer-events-auto px-3 py-2 sm:block sm:py-2.5 ${legendOpen ? "block" : "hidden"}`}>
+              <div className="flex items-start gap-2">
+                <p className="hidden min-w-0 flex-1 text-[13px] font-medium leading-snug text-ink sm:block">{layer.label}</p>
+                <p className="min-w-0 flex-1 truncate text-xs font-medium text-ink sm:hidden">{layer.label}</p>
+                {place ? (
+                  <Link href={`/study/${id}`} className="shrink-0 text-[11px] text-ink-3 underline underline-offset-2 hover:text-ink">radar layers</Link>
+                ) : (
+                  <button type="button" onClick={() => setTabSel("layers")} className="shrink-0 cursor-pointer text-[11px] text-ink-3 underline underline-offset-2 hover:text-ink">change map</button>
+                )}
+              </div>
+              <div className="mt-2"><Legend layer={layer} /></div>
+              {features && <p className="mt-2 text-[11px] text-ink-3">{openQ?.features === "lines" ? "Lines are drawn by class; hover one for its name." : "Points are ranked; hover one for its name."}</p>}
+            </div>
+          </div>
         )}
 
         <div className="absolute inset-x-2 bottom-2 z-10 sm:inset-x-3 sm:bottom-3">
           <div className="panel mx-auto max-w-3xl px-3 py-2">
+            {layer.dates.length > 1 && (
             <div className="flex items-center gap-2">
               {layer.dates.length > 2 && (
                 <button type="button" onClick={() => { setCompare(null); setPlaying((p) => !p); }} aria-label={playing ? "Pause the time-lapse" : "Play the time-lapse"}
@@ -336,9 +436,11 @@ export default function StudyPage({ id }: { id: string }) {
                 </ol>
               </div>
             </div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-3">
+            )}
+            <div className={`${layer.dates.length > 1 ? "mt-1" : ""} flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-3`}>
+              {layer.dates.length <= 1 && <span className="text-ink-2">{longDate(layer.dates[0])}</span>}
               {m.event_date && <span><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-drop align-middle" />event {longDate(m.event_date)}</span>}
-              {canCompare && (
+              {canCompare && !place && (
                 <label className="flex cursor-pointer items-center gap-1.5">
                   <input type="checkbox" checked={!!compare} onChange={(e) => { setPlaying(false); setCompare(e.target.checked ? (layer.dates.find((d) => d < date) ?? layer.dates[0]) : null); }} />
                   Before/after swipe
@@ -357,14 +459,14 @@ export default function StudyPage({ id }: { id: string }) {
                   3D terrain
                 </label>
               )}
-              {hasTerrain && meta && (
+              {hasTerrain && meta && !place && (
                 <label className="flex cursor-pointer items-center gap-1.5" title="Terrain and line-of-sight ground motion from this study's own data, with exaggeration sliders">
                   <input type="checkbox" checked={view3d} onChange={(e) => { setView3d(e.target.checked); setCompare(null); }} />
                   Ground-motion 3D
                 </label>
               )}
               {!view3d && (
-                <label className="flex items-center gap-1.5">opacity
+                <label className="hidden items-center gap-1.5 sm:flex">opacity
                   <input type="range" min={0.1} max={1} step={0.05} value={opacity} onChange={(e) => setOpacity(Number(e.target.value))} aria-label="Layer opacity" className="w-20" />
                 </label>
               )}
@@ -387,28 +489,83 @@ export default function StudyPage({ id }: { id: string }) {
         </div>
       </div>
 
-      <aside className="min-h-0 flex-1 overflow-y-auto border-line bg-panel-solid md:w-[420px] md:flex-none md:border-l" aria-label="Study details">
+      <motion.aside initial={reduced ? false : { opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
+        className="min-h-0 flex-1 overflow-y-auto border-line bg-panel-solid md:w-[420px] md:flex-none md:border-l" aria-label="Study details">
+        {place ? (
+          <header className="px-4 pb-3 pt-4">
+            <Link href="/" className="text-xs text-ink-3 transition-colors duration-200 hover:text-ink">← All places</Link>
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              {lens && <span className="font-medium uppercase tracking-wide" style={{ color: lens.color }}>{lens.label}</span>}
+              <span className="text-ink-3">· radar of {shortDate(m.passes[0].date)} to {longDate(m.passes[m.passes.length - 1].date)}</span>
+            </div>
+            <h1 className="mt-1 font-display text-[26px] font-medium leading-[1.1] tracking-tight">{m.name}</h1>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" disabled={reportBusy} onClick={() => { setReportBusy(true); setReportErr(null); downloadReport(id, m.name).catch((e) => setReportErr(e.message)).finally(() => setReportBusy(false)); }}
+                className="h-9 cursor-pointer rounded-lg border border-line px-3 text-sm text-ink-2 transition-colors duration-200 hover:text-ink disabled:opacity-50">
+                {reportBusy ? "Making the PDF…" : "Download the report (PDF)"}
+              </button>
+              <Link href={`/study/${id}`} className="flex h-9 items-center rounded-lg border border-line px-3 text-sm text-ink-2 transition-colors duration-200 hover:text-ink">Research view →</Link>
+            </div>
+            {reportErr && <p className="mt-2 text-sm text-drop" role="alert">{reportErr}</p>}
+          </header>
+        ) : (
         <header className="px-4 pb-4 pt-4">
-          <Link href="/" className="text-xs text-ink-3 transition-colors duration-200 hover:text-ink">← Globe</Link>
+          <Link href="/explore" className="text-xs text-ink-3 transition-colors duration-200 hover:text-ink">← Research explorer</Link>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
             {lens && <span className="font-medium uppercase tracking-wide" style={{ color: lens.color }}>{lens.label}</span>}
             <span className="rounded bg-white/10 px-1.5 py-0.5 text-ink-2">{m.kind === "showcase" ? "Showcase Site" : "Analysis"}</span>
             <span className="text-ink-3">{m.passes.length} Passes · {shortDate(m.passes[0].date)} to {longDate(m.passes[m.passes.length - 1].date)}</span>
           </div>
-          <h1 className="mt-1 font-display text-2xl leading-tight">{m.name}</h1>
+          <h1 className="mt-1 font-display text-2xl font-medium leading-tight tracking-tight">{m.name}</h1>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" disabled={reportBusy} onClick={() => { setReportBusy(true); setReportErr(null); downloadReport(id, m.name).catch((e) => setReportErr(e.message)).finally(() => setReportBusy(false)); }}
-              className="h-9 cursor-pointer rounded-lg bg-accent px-3 text-sm font-medium text-black transition-opacity duration-200 hover:opacity-90 disabled:opacity-50">
+              className="h-9 cursor-pointer rounded-lg bg-accent px-3 text-sm font-medium text-[#04111a] transition-opacity duration-200 hover:opacity-90 disabled:opacity-50">
               {reportBusy ? "Making the PDF…" : "PDF Report"}
             </button>
             {m.kind === "showcase" && m.model_card && (
               <Link href={`/models/${m.model_card}`} className="flex h-9 items-center rounded-lg border border-line px-3 text-sm text-ink-2 transition-colors duration-200 hover:text-ink">Model card</Link>
             )}
             <Link href={`/report/${id}`} className="flex h-9 items-center rounded-lg border border-line px-3 text-sm text-ink-2 transition-colors duration-200 hover:text-ink">Print view</Link>
+            {doc && <Link href={`/place/${id}`} className="flex h-9 items-center rounded-lg border border-accent/50 px-3 text-sm text-ink transition-colors duration-200 hover:bg-accent/10">Decision view →</Link>}
           </div>
           {reportErr && <p className="mt-2 text-sm text-drop" role="alert">{reportErr}</p>}
         </header>
+        )}
 
+        {!place && (
+        <div role="tablist" aria-label="Study sections" className="sticky top-0 z-10 flex gap-1 border-y border-line bg-panel-solid/95 px-3 py-2 backdrop-blur">
+          {([["layers", "Map layers"], ["more", "Charts and data"], ["ask", "Questions"]] as [Tab, string][])
+            .filter(([t]) => t !== "ask" || doc)
+            .map(([t, label]) => (
+              <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTabSel(t)}
+                className={`h-9 flex-1 cursor-pointer rounded-lg px-2 text-[13px] transition-colors duration-200 ${tab === t ? "bg-white/10 font-medium text-ink" : "text-ink-3 hover:text-ink"}`}>
+                {label}
+              </button>
+            ))}
+        </div>
+        )}
+
+        {tab === "ask" && (
+          <section className={`px-4 ${place ? "border-t border-line py-4" : "py-4"}`} role={place ? undefined : "tabpanel"} aria-label="Ask this place">
+            {doc ? (
+              <AskPanel doc={doc} spot={answers.spot} spotBusy={answers.spotBusy} spotErr={answers.spotErr} role={role} onRole={setRole}
+                openId={openId} onOpen={openQuestion} onGo={(s) => goTo(s)} scrollKey={scrollKey} />
+            ) : answers.settled ? (
+              <p className="text-sm text-ink-2">No questions are answered for this place yet. <Link href={`/study/${id}`} className="text-accent underline underline-offset-2">Open its research view</Link>.</p>
+            ) : <div className="busy-bar h-0.5" aria-hidden />}
+            {place && doc && (
+              <Link href={`/study/${id}`} className="mt-6 flex items-center gap-3 rounded-xl border border-line p-3 transition-colors duration-200 hover:border-white/25">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-ink">See the radar behind these answers</span>
+                  <span className="block text-xs text-ink-3">Every layer and date, time series, statistics and the AI Model card: the research view of this place.</span>
+                </span>
+                <span className="text-ink-3" aria-hidden>→</span>
+              </Link>
+            )}
+          </section>
+        )}
+
+        {tab === "layers" && <>
         {!!m.insights?.length && (
           <Section title="Why it changed">
             <ul className="flex flex-col gap-2 text-sm leading-relaxed text-ink">
@@ -470,6 +627,9 @@ export default function StudyPage({ id }: { id: string }) {
           </Section>
         )}
 
+        </>}
+
+        {tab === "more" && <>
         <Section title="Research plots" aside={<span className="text-xs text-ink-3">also in the PDF Report</span>}>
           <ResearchPlots m={m} />
         </Section>
@@ -523,7 +683,8 @@ export default function StudyPage({ id }: { id: string }) {
             {" · "}<a className="underline underline-offset-2" href="https://nisar.jpl.nasa.gov/applications/societal-benefit/" target="_blank" rel="noreferrer">Who uses NISAR data</a>
           </p>
         </Section>
-      </aside>
+        </>}
+      </motion.aside>
     </main>
   );
 }

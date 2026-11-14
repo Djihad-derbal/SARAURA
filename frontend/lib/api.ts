@@ -63,6 +63,14 @@ export type SiteSummary = {
   last: string;
   headline: string | null;
   has_model: boolean;
+  hook: string | null;
+  /** Questions answered for this place (null where none are built yet). */
+  decide: {
+    date: string;
+    questions: { id: string; title: string; headline: string; layer: string | null }[];
+    roles: { id: string; label: string; first: string }[];
+    cover_layer: string | null;
+  } | null;
 };
 
 export type LayerClass = { value: number; label: string; color: string };
@@ -70,7 +78,7 @@ export type LayerClass = { value: number; label: string; color: string };
 export type LayerInfo = {
   id: string;
   label: string;
-  kind: "physics" | "baseline" | "prediction" | "context";
+  kind: "physics" | "baseline" | "prediction" | "context" | "answer";
   unit: string;
   colormap: string;
   range: [number, number];
@@ -122,6 +130,66 @@ export type Timeseries = { variable: string; unit: string; series: TsPoint[]; ce
 export type GeoPolygon = { type: "Polygon"; coordinates: [number, number][][] };
 
 export const fetchSites = (signal?: AbortSignal) => getJson<SiteSummary[]>("/sites", signal);
+
+// ---------------------------------------------------------------- Questions and answers (ADR-0008)
+
+export type Verdict = "good" | "caution" | "bad" | "unknown";
+export type Solution = { title: string; what: string; cost: "low" | "medium" | "high"; source: string; check: string };
+export type AnswerClass = { value: number; label: string; color: string; verdict: Verdict; meaning: string; solutions: string[]; area_ha: number; share: number };
+export type RankedColumn = { key: string; label: string; unit?: string };
+export type RankedRow = Record<string, string | number> & { lon: number; lat: number };
+export type Question = {
+  id: string;
+  title: string;
+  short: string;
+  order: number;
+  status: Status;
+  point_only: boolean;
+  headline: string;
+  layer: string | null;
+  classes: AnswerClass[];
+  solutions: string[];
+  ranked?: { title: string; columns: RankedColumn[]; rows: RankedRow[]; total: number };
+  features?: "lines" | "points" | null;
+  sources: string[];
+  limits: string[];
+};
+export type Role = { id: string; label: string; questions: string[] };
+export type Answers = {
+  site: string;
+  lens: Lens;
+  name: string;
+  date: string;
+  grid_m: number;
+  roles: Role[];
+  questions: Question[];
+  solutions: Record<string, Solution>;
+  evidence: Record<string, unknown>;
+  attribution: string;
+};
+export type Alternative = { lon: number; lat: number; distance_m: number; direction: string; sinking_cm_yr: number; years_500: number; label: string };
+export type AnswerCard = {
+  question: string;
+  title: string;
+  class: number | null;
+  label: string | null;
+  verdict: Verdict | null;
+  color: string | null;
+  reasons: string[];
+  solutions: string[];
+  alternatives?: Alternative[];
+};
+export type AnswersAt = { lon: number; lat: number; date: string; cards: AnswerCard[]; values: Record<string, number | null> };
+
+export const fetchAnswers = (id: string, signal?: AbortSignal) => getJson<Answers>(`/answers/${id}`, signal);
+export type Place = { name: string; local: string; kind: string; lon: number; lat: number };
+/** Minimal GeoJSON for the map's drawn answers (lines and points). */
+export type AnswerFeature = { type: "Feature"; properties: Record<string, string | number>; geometry: { type: "LineString"; coordinates: [number, number][] } | { type: "Point"; coordinates: [number, number] } };
+export type AnswerFeatures = { type: "FeatureCollection"; features: AnswerFeature[] };
+export const fetchPlaces = (id: string, q: string, signal?: AbortSignal) => getJson<Place[]>(`/answers/${id}/places?q=${encodeURIComponent(q)}`, signal);
+export const fetchFeatures = (id: string, question: string, signal?: AbortSignal) => getJson<AnswerFeatures>(`/answers/${id}/features/${question}`, signal);
+export const fetchAnswersAt = (id: string, lon: number, lat: number, signal?: AbortSignal) =>
+  getJson<AnswersAt>(`/answers/${id}/at?lon=${lon.toFixed(5)}&lat=${lat.toFixed(5)}`, signal);
 export const fetchManifest = (id: string, signal?: AbortSignal) => getJson<Manifest>(`/sites/${id}`, signal);
 export const fetchStats = (id: string, layer: string, date: string, signal?: AbortSignal) => getJson<LayerStats>(`/stats/${id}?layer=${layer}&date=${date}`, signal);
 export const fetchStatsIn = (id: string, layer: string, date: string, polygon: GeoPolygon, signal?: AbortSignal) =>

@@ -44,7 +44,7 @@ export function ModelsTable() {
   return (
     <main className="h-dvh overflow-y-auto bg-bg">
       <div className="mx-auto max-w-5xl px-4 py-8">
-        <Link href="/" className="text-xs text-ink-3 hover:text-ink">← Globe</Link>
+        <Link href="/explore" className="text-xs text-ink-3 hover:text-ink">← Research explorer</Link>
         <h1 className="mt-2 font-display text-4xl">Models</h1>
         <p className="mt-2 max-w-2xl text-ink-2">
           One AI Model per Lens, each scored against a simple Baseline on ground it did not train on. AI runs only on the Showcase Sites; your own Analyses get the radar measurements and the Baseline.

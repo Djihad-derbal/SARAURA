@@ -1,0 +1,186 @@
+# Solutions catalogue: the options a Question can offer. Each is a starting point with a stated
+# source, never an engineering design (contracts/solutions.schema.json).
+#
+# cost: low | medium | high (relative, for ranking options against each other)
+# check: what to confirm on the ground before acting
+
+# ---------------------------------------------------------------- building on sinking ground
+
+standard_foundation:
+  title: "Standard foundation to the building code"
+  what: "Design to Mexico City's foundation code for the plot's soil zone. The radar shows no unusual sinking or tilt here."
+  cost: low
+  source: "Gobierno de la Ciudad de México, Normas Técnicas Complementarias para Diseño y Construcción de Cimentaciones"
+  check: "The soil study the code already requires for the plot's zone."
+
+yearly_ground_check:
+  title: "Re-check the ground every year"
+  what: "Look at this plot again with each new year of NISAR data, or survey a levelling benchmark every 1 to 2 years. Sinking can start when nearby pumping changes."
+  cost: low
+  source: "Team practice; NISAR repeats every 12 days"
+  check: "Compare the yearly speed with this year's."
+
+flexible_connections:
+  title: "Flexible joints where the building meets the street"
+  what: "The whole block sinks together, so the building itself is safe, but pipes, drains, ramps and entrances tear where they meet the street. Use flexible pipe couplings and entrances that can be re-levelled."
+  cost: low
+  source: "General engineering practice for regional subsidence; confirm with a structural engineer"
+  check: "Cracks at the junction of existing buildings and pavements on the same street."
+
+compensated_foundation:
+  title: "Compensated (floating) or raft foundation"
+  what: "Dig out a weight of soil roughly equal to the building's weight, so the clay below carries almost no extra load. Widely used on Mexico City's lake clay."
+  cost: medium
+  source: "Zeevaert, Foundation Engineering for Difficult Subsoil Conditions (1983); Mexico City foundation code (NTC)"
+  check: "Borehole or cone test for clay thickness and groundwater level."
+
+light_flexible_structure:
+  title: "Light, flexible building of 1 to 3 storeys"
+  what: "A steel or timber frame tolerates uneven sinking far better than long rigid walls or tall masonry. Keep it short and light."
+  cost: medium
+  source: "Bjerrum (1963) tilt limits: frame buildings tolerate more tilt than rigid walls"
+  check: "Structural engineer's review of the frame against the expected tilt."
+
+avoid_rigid_tall:
+  title: "Avoid tall or rigid buildings here"
+  what: "The ground here is tilting fast enough to crack walls within about a decade. Tall, rigid or long buildings would need special foundations that may cost more than a better plot."
+  cost: high
+  source: "Bjerrum (1963): first cracks in walls at 1/300 tilt, structural damage at 1/150"
+  check: "Levelling survey across the plot to confirm the tilt."
+
+soil_study_first:
+  title: "Detailed soil study and levelling before design"
+  what: "Boreholes or cone tests for clay thickness, the groundwater level, and levelling benchmarks across the plot. The radar shows where to look; this shows what is below."
+  cost: medium
+  source: "Mexico City foundation code (NTC): soil exploration depends on the zone and the building"
+  check: "This is the check."
+
+choose_better_plot:
+  title: "Look at the better plots nearby"
+  what: "Ask the 'Better plots nearby?' question at this spot: it ranks the steadiest ground within 2 km."
+  cost: low
+  source: "SARAURA question m3_better_plots"
+  check: "Visit the alternatives; confirm with a soil study."
+
+more_data_needed:
+  title: "Not enough radar data: survey it"
+  what: "The radar could not measure this spot reliably (water, dense change or noisy signal). Use a levelling survey or a GNSS station instead."
+  cost: low
+  source: "Team rule: coherence below 0.3 or an unsteady fit is masked"
+  check: "Levelling survey."
+
+# ---------------------------------------------------------------- lines: Metro, light rail, canals
+
+inspect_segment_first:
+  title: "Inspect this segment first"
+  what: "Survey track geometry, supports and tunnel or viaduct joints where the ground sinks unevenly along the line, starting with the fewest years to the limit."
+  cost: medium
+  source: "Bjerrum (1963) tilt limits applied along the line; rails are more sensitive than buildings"
+  check: "Track geometry survey; crack mapping on supports and joints."
+
+monitoring_points:
+  title: "Add monitoring points on the structure"
+  what: "Levelling benchmarks or GNSS on the structure, compared with each new NISAR Pass, to catch speeding up early."
+  cost: low
+  source: "Team practice"
+  check: "Benchmarks agree with the radar speed within about 1 cm per year."
+
+relevel_and_joints:
+  title: "Re-level and fit adjustable joints"
+  what: "Plan maintenance to re-level track and adjust joints and supports where uneven sinking will pass tolerance."
+  cost: medium
+  source: "General railway maintenance practice; confirm with the operator's standards"
+  check: "The operator's track tolerances."
+
+canal_gradient_check:
+  title: "Survey the canal's gradient"
+  what: "Drains and canals lose their slope as the ground sinks unevenly, and water stops flowing by gravity (documented for Mexico City's Gran Canal del Desagüe). Survey the bed slope and plan pumping."
+  cost: medium
+  source: "Mexico City drainage history; CONAGUA Túnel Emisor Oriente"
+  check: "Levelling along the canal bed."
+
+routine_watch:
+  title: "Keep the routine checks"
+  what: "No segment here is close to the limit. Keep the normal inspection cycle and compare with NISAR yearly."
+  cost: low
+  source: "Team practice"
+  check: "Next scheduled inspection."
+
+# ---------------------------------------------------------------- after a wildfire
+
+log_erosion_barriers:
+  title: "Log or brush barriers along the slope"
+  what: "Lay burned trunks or brush across the slope, following the contour, to slow runoff and catch soil before it reaches channels."
+  cost: medium
+  source: "Robichaud, Ashmun & Sims (2010), Post-fire treatment effectiveness for hillslope stabilization, USDA Forest Service RMRS-GTR-240"
+  check: "Field visit: bare soil, rills and loose ash on the slope."
+
+mulch_steep_slopes:
+  title: "Straw or wood mulch on the steepest burned ground"
+  what: "Cover bare burned soil on the steepest slopes; mulch was the most effective hillslope treatment in US post-fire studies."
+  cost: medium
+  source: "Robichaud, Ashmun & Sims (2010), USDA Forest Service RMRS-GTR-240"
+  check: "Ground cover left after the fire (bare soil share)."
+
+clear_channels_culverts:
+  title: "Clear channels and culverts before the rains"
+  what: "Remove burned debris from stream channels and enlarge or clear culverts so mud and water pass under roads instead of over them."
+  cost: low
+  source: "USDA Forest Service BAER road and channel treatments"
+  check: "Walk the channel from the burned slope down to the road or village."
+
+warn_village:
+  title: "Warn the village and agree a rain alert"
+  what: "Tell residents below the burned slope, mark safe routes, and agree a rainfall level (from Office National de la Météorologie forecasts) at which people move away from the channel."
+  cost: low
+  source: "Staley et al. (2017): post-fire debris flows start at short, intense rain bursts"
+  check: "Which houses sit in or beside the channel."
+
+road_closure_trigger:
+  title: "Close the road in heavy rain, with a loader on standby"
+  what: "Agree a rain trigger to close the road section, a detour, and keep a loader near the crossing to clear mud quickly."
+  cost: low
+  source: "USDA Forest Service BAER road treatments; team practice"
+  check: "Culvert size and condition at the crossing."
+
+sediment_traps:
+  title: "Small check dams or sediment traps in gullies"
+  what: "Straw-bale or log check dams in small gullies hold back sediment before it reaches rivers, reservoirs and roads."
+  cost: medium
+  source: "Robichaud, Ashmun & Sims (2010), USDA Forest Service RMRS-GTR-240 (channel treatments)"
+  check: "Gully size; check dams fail in large channels."
+
+replant_native:
+  title: "Replant with native species"
+  what: "Plant native trees suited to the site (in Jijel's forests: cork oak, and pine where it grew before) from forestry-service nurseries, after the soil is protected."
+  cost: high
+  source: "Mediterranean post-fire restoration practice; local forestry service"
+  check: "What grew here before the fire, and whether it is resprouting."
+
+natural_regrowth:
+  title: "Let it regrow and keep grazing out"
+  what: "Cork oak and Mediterranean shrubs often resprout after fire. Protect the area from grazing for a few years instead of planting."
+  cost: low
+  source: "Cork oak resprouts from its bark after fire (Mediterranean forest ecology)"
+  check: "Green shoots on trunks and stumps in spring."
+
+protect_soil_first:
+  title: "Protect the soil before planting"
+  what: "On steep burned ground, seedlings wash away in the first winter. Put barriers or mulch in place first, plant after the rains."
+  cost: medium
+  source: "Robichaud, Ashmun & Sims (2010), USDA Forest Service RMRS-GTR-240"
+  check: "Signs of erosion after the first heavy rain."
+
+recheck_spring:
+  title: "Check again in spring"
+  what: "Autumn rain makes the ground wetter, which can look like regrowth on radar. Re-check after the rains and visit the patch."
+  cost: low
+  source: "Wet soil raises radar backscatter (NASA Earthdata SAR introduction)"
+  check: "Field visit in March to May."
+
+compensation_list:
+  title: "Add to the compensation list"
+  what: "Record burned hectares per field and farm for the local council's compensation process."
+  cost: low
+  source: "Team practice"
+  check: "Field boundaries and owners."

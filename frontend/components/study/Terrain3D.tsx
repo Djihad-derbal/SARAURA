@@ -143,7 +143,7 @@ function Surface({ studyId, meta, date, drapeUrl, k, kd, onPick, reduced }: Prop
 export default function Terrain3D(props: Props) {
   return (
     <Canvas camera={{ position: [0, 6, 9], fov: 40, near: 0.05, far: 200 }} dpr={[1, 2]} aria-label="3D view of the terrain and ground motion">
-      <color attach="background" args={["#05070a"]} />
+      <color attach="background" args={["#04111a"]} />
       <hemisphereLight args={["#dbe7ff", "#1b1f27", 0.9]} />
       <directionalLight position={[-6, 8, 4]} intensity={1.6} />
       <Surface {...props} />

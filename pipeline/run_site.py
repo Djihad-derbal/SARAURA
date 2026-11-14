@@ -176,6 +176,14 @@ def run(site: dict, kind: str = "showcase") -> int:
         print(f"    {e}")
     for line in manifest["insights"]:
         print(f"  - {line}")
+    if kind == "showcase" and not errs:
+        from . import answers
+
+        if answers.questions(site["lens"]):
+            try:  # Questions read the layers just written; a failure must not lose the site itself
+                errs = errs or answers.build(site["id"])
+            except Exception as e:
+                print(f"  Questions step failed: {e}")
     return 1 if errs else 0
 
 

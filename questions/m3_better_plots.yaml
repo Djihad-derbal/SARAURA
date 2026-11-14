@@ -1,0 +1,23 @@
+id: m3_better_plots
+title: "Are there better plots nearby?"
+short: "Click a spot: the steadiest ground within 2 km, ranked."
+lens: subsidence
+recipe: better_plots
+order: 3
+evidence: [vert_vel_cm_yr, tilt_years_500, fit_se_cm_yr, mean_coherence]
+thresholds:
+  radius_m: 2000
+  min_separation_m: 400
+  max_results: 3
+  amber_years: 50
+  amber_speed_cm_yr: 5
+  min_coherence: 0.3
+  max_fit_se_cm_yr: 3
+classes: []
+point_only: true
+solutions: [soil_study_first, yearly_ground_check]
+sources:
+  - "Same evidence and thresholds as 'Is it safe to build here?'"
+limits:
+  - "Ranks ground behaviour only; it does not know prices, zoning or what is already built there."
+status: prototype

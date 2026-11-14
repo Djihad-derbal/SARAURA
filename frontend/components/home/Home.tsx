@@ -22,6 +22,7 @@ import {
   type SiteSummary,
 } from "@/lib/api";
 import { ANCHOR, DEM_SOURCE, buildStyle } from "@/lib/basemap";
+import SiteNav from "@/components/SiteNav";
 import { LENSES } from "@/lib/style";
 
 type Mode = "showcase" | "explore";
@@ -64,14 +65,14 @@ export default function Home() {
       map.on("load", () => {
         map!.addSource("coverage", { type: "geojson", data: EMPTY });
         map!.addSource("draw", { type: "geojson", data: EMPTY });
-        map!.addLayer({ id: "coverage-fill", type: "fill", source: "coverage", paint: { "fill-color": "#f59e0b", "fill-opacity": 0.04 } }, ANCHOR);
-        map!.addLayer({ id: "coverage-line", type: "line", source: "coverage", paint: { "line-color": "#f59e0b", "line-opacity": 0.45, "line-width": 1 } }, ANCHOR);
+        map!.addLayer({ id: "coverage-fill", type: "fill", source: "coverage", paint: { "fill-color": "#2dd4bf", "fill-opacity": 0.05 } }, ANCHOR);
+        map!.addLayer({ id: "coverage-line", type: "line", source: "coverage", paint: { "line-color": "#2dd4bf", "line-opacity": 0.5, "line-width": 1 } }, ANCHOR);
         map!.addLayer({ id: "draw-fill", type: "fill", source: "draw", paint: { "fill-color": "#ffffff", "fill-opacity": 0.12 } });
         map!.addLayer({ id: "draw-line", type: "line", source: "draw", paint: { "line-color": "#ffffff", "line-width": 2, "line-dasharray": [2, 1] } });
         // 3D: real terrain under every layer, and an atmosphere on the globe.
         map!.setTerrain({ source: DEM_SOURCE, exaggeration: 1.5 });
         try {
-          map!.setSky({ "sky-color": "#0b1526", "horizon-color": "#1d3557", "fog-color": "#05070a", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.4, "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 6, 0.6, 9, 0] });
+          map!.setSky({ "sky-color": "#06283a", "horizon-color": "#12586b", "fog-color": "#04111a", "sky-horizon-blend": 0.6, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.4, "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 6, 0.6, 9, 0] });
         } catch {
           // Older renderers without sky support still get terrain.
         }
@@ -323,28 +324,23 @@ export default function Home() {
     <main className="relative h-dvh w-full overflow-hidden bg-bg">
       <div ref={container} className="h-full w-full" aria-label="Globe" />
 
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-wrap items-start justify-between gap-3 p-3 sm:p-4">
-        <div className="pointer-events-auto">
-          <h1 className="font-display text-3xl leading-none text-ink sm:text-4xl">SARAURA</h1>
-          <p className="mt-1 max-w-xs text-sm text-ink-2">Earth&rsquo;s surface, changing, seen by NASA-ISRO&rsquo;s NISAR radar through cloud and night.</p>
-        </div>
-        <nav className="pointer-events-auto flex items-center gap-2">
-          <div className="panel flex p-1" role="tablist" aria-label="Mode">
-            {(["explore", "showcase"] as const).map((m) => (
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col gap-2 p-3 sm:p-4">
+        <div className="pointer-events-auto"><SiteNav active="research" floating /></div>
+        <div className="pointer-events-auto flex items-center gap-2">
+          <div className="panel flex p-1" role="tablist" aria-label="Research tools">
+            {([["explore", "Any area"], ["showcase", "Showcase Sites"]] as const).map(([m, label]) => (
               <button
                 key={m}
                 role="tab"
                 aria-selected={mode === m}
                 onClick={() => setMode(m)}
-                className={`h-9 cursor-pointer rounded-lg px-4 text-sm capitalize transition-colors duration-200 ${mode === m ? "bg-white/15 text-ink" : "text-ink-2 hover:text-ink"}`}>
-                {m}
+                className={`h-9 cursor-pointer rounded-lg px-4 text-sm transition-colors duration-200 ${mode === m ? "bg-white/15 text-ink" : "text-ink-2 hover:text-ink"}`}>
+                {label}
               </button>
             ))}
           </div>
-          <Link href="/models" className="panel flex h-11 items-center px-4 text-sm text-ink-2 transition-colors duration-200 hover:text-ink">
-            Models
-          </Link>
-        </nav>
+          <Link href="/browse" className="panel hidden h-11 items-center px-4 text-sm text-ink-2 transition-colors duration-200 hover:text-ink sm:flex">Raw Granules</Link>
+        </div>
       </header>
 
       {error && (
@@ -358,7 +354,7 @@ export default function Home() {
           key="showcase"
           initial={reduced ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="absolute inset-x-3 bottom-3 z-20 max-h-[45dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-4 sm:top-28 sm:max-h-[calc(100dvh-140px)] sm:w-[380px]"
+          className="absolute inset-x-3 bottom-3 z-20 max-h-[45dvh] overflow-y-auto sm:inset-x-auto sm:bottom-auto sm:left-4 sm:top-36 sm:max-h-[calc(100dvh-160px)] sm:w-[380px]"
           aria-label="Showcase Sites">
           <ul className="flex flex-col gap-2">
             {!sites && !error && Array.from({ length: 4 }).map((_, i) => <li key={i} className="panel h-24 animate-pulse" aria-hidden />)}
@@ -393,10 +389,11 @@ export default function Home() {
           key="explore"
           initial={reduced ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="panel absolute inset-x-3 bottom-3 z-20 max-h-[55dvh] overflow-y-auto p-4 sm:inset-x-auto sm:bottom-auto sm:left-4 sm:top-28 sm:max-h-[calc(100dvh-140px)] sm:w-[380px]"
+          className="panel absolute inset-x-3 bottom-3 z-20 max-h-[55dvh] overflow-y-auto p-4 sm:inset-x-auto sm:bottom-auto sm:left-4 sm:top-36 sm:max-h-[calc(100dvh-160px)] sm:w-[380px]"
           aria-label="Explore: analyse any area">
-          <h2 className="text-base font-medium">Explore NISAR in 3D</h2>
-          <p className="mt-1 text-sm leading-relaxed text-ink-2">Fly to a Showcase Site, or zoom anywhere: the globe tilts into real terrain as you go.</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-ink-3">For research and teaching</p>
+          <h2 className="mt-1 text-base font-medium">Every NISAR Pass, on a 3D globe</h2>
+          <p className="mt-1 text-sm leading-relaxed text-ink-2">Fly to a Showcase Site, or zoom anywhere: the globe tilts into real terrain as you go. Looking for answers about a place? <Link href="/" className="text-accent underline underline-offset-2">Go to Places</Link>.</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {ordered.map((s) => (
               <button key={s.id} type="button" onClick={() => flyTo(s)} onDoubleClick={() => router.push(`/study/${s.id}`)}

@@ -26,7 +26,7 @@ export async function buildStyle(projection: "globe" | "mercator", terrain = fal
   } catch {
     // Offline: Blue Marble alone.
   }
-  const layers = base?.layers ?? [{ id: "bg", type: "background", paint: { "background-color": "#05070a" } } as Layer];
+  const layers = base?.layers ?? [{ id: "bg", type: "background", paint: { "background-color": "#04111a" } } as Layer];
   const onTop = (l: Layer) => (l.type === "symbol" && !/^road_|^highway_name/.test(l.id)) || l.id.startsWith("boundary_");
   const drop = (l: Layer) => l.type === "symbol" && /^road_|^highway_name/.test(l.id);
   return {

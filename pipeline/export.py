@@ -39,9 +39,10 @@ def _transform(grid: dict):
     return from_origin(grid["x0"], grid["y0"], grid["res"], grid["res"])
 
 
-def write_cog(site_id: str, name: str, array: np.ndarray, grid: dict, categorical: bool = False) -> str:
-    """One 2-D layer as a Cloud-Optimized GeoTIFF with internal overviews. Returns its storage key."""
-    key = f"{site_id}/layers/{name}.tif"
+def write_cog(site_id: str, name: str, array: np.ndarray, grid: dict, categorical: bool = False, sub: str = "layers") -> str:
+    """One 2-D layer as a Cloud-Optimized GeoTIFF with internal overviews. Returns its storage key.
+    `sub` is the folder under data/<site_id>/: "layers" (listed in the manifest) or "evidence" (read by Questions only)."""
+    key = f"{site_id}/{sub}/{name}.tif"
     h, w = array.shape
     if categorical:
         data, dtype, nodata, resampling = array.astype(np.uint8), "uint8", 255, "nearest"

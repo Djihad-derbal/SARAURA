@@ -1,0 +1,48 @@
+id: a1_burned_slopes
+title: "Which burned slopes could send mud onto villages this winter?"
+short: "Burned steep ground, the channels it drains into, and the villages and roads below."
+lens: wildfire
+recipe: burned_slopes
+order: 1
+evidence: [burned, slope, dem_flow, osm_places]
+context: [places, roads]
+thresholds:
+  steep_deg: 23          # Staley et al. (2017): burned ground on slopes of 23 degrees or more
+  path_ha: 2             # channel carries mud from at least 2 ha of burned steep ground
+  high_path_ha: 10
+  path_share: 0.15       # ...that is at least 15% of its basin
+  high_share: 0.4
+  max_basin_ha: 800      # debris flows start in small basins (USGS assessments: about 0.1 to 8 km2)
+  flow_cell_m: 60
+  channel_ha: 10         # a cell is a channel once 10 ha drain through it
+  village_radius_m: 250
+classes:
+  - value: 1
+    label: "Burned steep slope (mud source)"
+    color: "#b35806"
+    verdict: caution
+    meaning: "Burned ground on a slope of 23 degrees or more: rain washes ash and soil off it."
+    solutions: [log_erosion_barriers, mulch_steep_slopes]
+  - value: 2
+    label: "Mud path (15-40% of its basin burned steep)"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "A channel in a small basin (under 8 km2) where 15 to 40% of the ground upstream is burned and steep."
+    solutions: [clear_channels_culverts, sediment_traps]
+  - value: 3
+    label: "Main mud path (over 40% of its basin burned steep)"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "A channel in a small basin where over 40% of the ground upstream (and at least 10 ha) is burned and steep: the most likely route for mud and debris."
+    solutions: [warn_village, clear_channels_culverts, sediment_traps, log_erosion_barriers]
+sources:
+  - "Staley, D.M. et al. (2017). Prediction of spatially explicit rainfall intensity-duration thresholds for post-fire debris-flow generation in the western United States. Geomorphology 278, 149-162 (burned ground on slopes of 23 degrees or more)"
+  - "Barnes, R., Lehman, C. & Mulla, D. (2014). Priority-flood: an optimal depression-filling and watershed-labeling algorithm for digital elevation models. Computers & Geosciences 62, 117-127"
+  - "Copernicus GLO-30 elevation model; villages and roads from OpenStreetMap contributors, ODbL"
+limits:
+  - "Burned area comes from the AI Model where one exists, else the Baseline; severity is not mapped, so all burned ground counts the same."
+  - "The basin shares (15% and 40%) and the 8 km2 basin limit are team choices inspired by the USGS model's burned-steep share, not a calibrated debris-flow probability."
+  - "Large rivers below burned basins can still carry sediment floods; this question only maps where debris flows start."
+  - "Flow paths come from a 30 m elevation model resampled to 60 m: small gullies are missed."
+features: points           # ranked items drawn on the map as points
+status: prototype

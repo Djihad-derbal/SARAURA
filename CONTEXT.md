@@ -8,7 +8,12 @@ Last updated: 2026-11-13.
 
 An open-source web app for the NASA Space Apps 2026 challenge "Dancing with the SARs". It turns NISAR radar data into maps, 3D views, time series, statistics and PDF Reports, so engineers, educators and decision-makers can study surface change without reading HDF5 files.
 
-It has two ways in:
+The site has two halves (redesigned 2026-11-14), decisions first and research second:
+
+- **Places** (`/`, then `/place/<id>`), the main path: each place leads with the questions it answers ("Is it safe to build here?"), an "I am a…" picker, and a focused page of map plus questions with a "Who are you?" first step. Links can be shared (`?role=&q=`).
+- **Research explorer** (`/explore`, plus the research view `/study/<id>`, raw Granules `/browse` and Model scores `/models`), for research and teaching: the two ways in below.
+
+The research side has two ways in:
 
 1. **Explore anywhere.** A globe shows every NISAR Pass as a footprint with a quicklook. A user draws an area, and an on-demand **Analysis** processes only that area. They can apply a **Lens** to get its physics layers, its **Baseline** and a "Why it changed" explanation. No AI **Model** runs here ([ADR-0001](docs/adr/0001-ai-only-on-showcase-sites.md)).
 2. **Showcase Sites.** Seven curated, precomputed places, one or two per Lens, each with a trained Model, a Model card and a Model vs Baseline score.
@@ -50,6 +55,7 @@ ISRO Bhoonidhi (S-band, pending)           per site         COGs, parquet,      
 - **Models plug in through files only:** prediction COGs plus a Model card JSON. The app never imports model code ([ADR-0005](docs/adr/0005-models-integrate-through-files.md)).
 - **Assistant:** Gemini `gemini-3.6-flash`, called server-side. It only sees the current Site or Analysis, quotes numbers but never computes them, and is badged "prototype" ([ADR-0006](docs/adr/0006-grounded-assistant.md)).
 - **Report:** a Next.js `/report` page rendered to PDF by Playwright inside `api/`. There is no CSV export ([ADR-0007](docs/adr/0007-pdf-report-via-headless-chromium.md)).
+- **Questions:** one evidence pass per site answers many **Questions** (`questions/*.yaml`, rule recipes in `pipeline/answers.py`), each with several cited **Solutions** (`solutions/catalogue.yaml`) and **Roles** that pick what each user sees. They are rules, not Models ([ADR-0008](docs/adr/0008-questions-as-rules-over-evidence.md)). Built for Mexico City and Jijel (2026-11-14).
 - **Storage:** behind an interface: local disk now, object storage later. The Analysis area limit is a config value set from measured seconds per km² for each product.
 
 ## What already exists in the repo (updated 2026-11-13, after Phase 0)

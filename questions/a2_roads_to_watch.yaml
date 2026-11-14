@@ -1,0 +1,38 @@
+id: a2_roads_to_watch
+title: "Which roads should be watched or closed in heavy rain?"
+short: "Road sections that cross a mud path below the burned slopes, ranked."
+lens: wildfire
+recipe: roads_to_watch
+order: 2
+evidence: [burned, slope, dem_flow, osm_roads]
+context: [roads]
+thresholds:
+  steep_deg: 23
+  path_ha: 2
+  high_path_ha: 10
+  path_share: 0.15
+  high_share: 0.4
+  max_basin_ha: 800
+  flow_cell_m: 60
+  channel_ha: 10         # a cell is a channel once 10 ha drain through it
+  segment_m: 500
+classes:
+  - value: 1
+    label: "Watch in heavy rain"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "The road crosses a mud path: a small basin with 15 to 40% of its ground burned and steep."
+    solutions: [clear_channels_culverts, road_closure_trigger]
+  - value: 2
+    label: "Close in heavy rain"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "The road crosses a main mud path: a small basin with over 40% of its ground burned and steep."
+    solutions: [road_closure_trigger, clear_channels_culverts, sediment_traps]
+sources:
+  - "Staley et al. (2017), as for the burned slopes question"
+  - "Roads from OpenStreetMap contributors (trunk to unclassified), ODbL"
+limits:
+  - "Bridges and culvert sizes are not known: a large culvert may carry the flow safely."
+features: lines           # ranked items drawn on the map as lines
+status: prototype

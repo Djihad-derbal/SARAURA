@@ -8,12 +8,14 @@ import { Legend, StatsView } from "@/components/study/StudyPage";
 import {
   API,
   bboxKm2,
+  fetchAnswers,
   fetchAreaSeries,
   fetchManifest,
   fetchStats,
   layerPreviewUrl,
   longDate,
   vertexUrl,
+  type Answers,
   type Bbox,
   type GeoPolygon,
   type LayerInfo,
@@ -64,9 +66,11 @@ export default function Report({ id }: { id: string }) {
   const [series, setSeries] = useState<Record<string, Timeseries | null>>({});
   const [loadedImgs, setLoadedImgs] = useState<Set<string>>(new Set());
   const [researchDone, setResearchDone] = useState(false);
+  const [answers, setAnswers] = useState<Answers | null | undefined>(undefined); // undefined: still loading; null: none
 
   useEffect(() => {
     fetchManifest(id).then(setM).catch((e) => setErr(e.message));
+    fetchAnswers(id).then(setAnswers).catch(() => setAnswers(null));
   }, [id]);
 
   const main = useMemo(() => (m ? defaultLayer(m.layers, m.kind) : null), [m]);
@@ -75,7 +79,7 @@ export default function Report({ id }: { id: string }) {
   const atlas = useMemo(() => {
     if (!m) return [] as LayerInfo[];
     const shown = new Set([main?.id, baseline?.id, "rgb", "hvhh_db"]);
-    return m.layers.filter((l) => !shown.has(l.id));
+    return m.layers.filter((l) => !shown.has(l.id) && l.kind !== "answer"); // answers get their own chapter
   }, [m, main, baseline]);
 
   // Optical context dates: around the event, else the first and last Pass.
@@ -94,8 +98,9 @@ export default function Report({ id }: { id: string }) {
     if (rgb) k.push("rgb");
     if (baseline && baseline.id !== main.id) k.push("baseline");
     for (const l of atlas) k.push(`atlas_${l.id}`);
+    for (const q of answers?.questions ?? []) if (q.layer && m.layers.some((l) => l.id === q.layer)) k.push(`ans_${q.id}`);
     return k;
-  }, [m, rgb, main, baseline, atlas]);
+  }, [m, rgb, main, baseline, atlas, answers]);
   const done = useCallback((k: string) => () => setLoadedImgs((s) => (s.has(k) ? s : new Set(s).add(k))), []);
 
   useEffect(() => {
@@ -112,7 +117,7 @@ export default function Report({ id }: { id: string }) {
   const onResearch = useCallback(() => setResearchDone(true), []);
   const wantStats = [main, baseline, ...atlas].filter((l): l is LayerInfo => !!l && l.colormap !== "rgb");
   const ready =
-    !!m && imageKeys.length > 0 && imageKeys.every((k) => loadedImgs.has(k)) && researchDone && wantStats.every((l) => l.id in stats) && m.series.every((v) => v.variable in series);
+    !!m && answers !== undefined && imageKeys.length > 0 && imageKeys.every((k) => loadedImgs.has(k)) && researchDone && wantStats.every((l) => l.id in stats) && m.series.every((v) => v.variable in series);
   useEffect(() => {
     if (ready) document.body.setAttribute("data-report-ready", "true");
     return () => document.body.removeAttribute("data-report-ready");
@@ -217,6 +222,85 @@ export default function Report({ id }: { id: string }) {
           {twoUp && layerCard(baseline!, "baseline")}
         </div>
       </section>
+
+      {/* 3b. Questions answered (ADR-0008) */}
+      {answers && answers.questions.length > 0 && (
+        <section className="page-part">
+          <h2 className="report-h2">Questions answered</h2>
+          <p className="report-p">
+            The same radar evidence answers different questions for different people. Each answer below is a rule on the measured layers with stated thresholds (not AI), then the options that fit it,
+            each with its source and what to check on the ground. It is a screening to decide where to look first, not an engineering report.
+          </p>
+          <p className="mt-1 text-[10.5px] text-neutral-500">
+            Who asks what: {answers.roles.map((r) => `${r.label} (${r.questions.map((qid) => answers.questions.findIndex((q) => q.id === qid) + 1).filter((n) => n > 0).join(", ")})`).join(" · ")}
+          </p>
+          {answers.questions.map((q, qi) => {
+            const layer = q.layer ? m.layers.find((l) => l.id === q.layer) : null;
+            const worst = [...q.classes].filter((c) => c.verdict === "bad" || c.verdict === "caution").sort((a, b) => (a.verdict === b.verdict ? 0 : a.verdict === "bad" ? -1 : 1));
+            return (
+              <article key={q.id} className="mt-6 break-inside-avoid">
+                <p className="text-[10px] uppercase tracking-widest text-neutral-500">Question {qi + 1} · {q.status}</p>
+                <h3 className="text-[16px] font-semibold leading-snug">{q.title}</h3>
+                <p className="mt-1 border-l-[3px] border-amber-600 pl-3 text-[12.5px] leading-snug">{q.headline}</p>
+                <div className={`mt-2 grid gap-5 ${layer ? "grid-cols-[1.25fr_1fr]" : "grid-cols-1"}`}>
+                  {layer && (
+                    <div className="min-w-0">
+                      <MapFrame src={layerPreviewUrl(id, layer.id, last(layer), 1000)} bbox={b} alt={q.title} onDone={done(`ans_${q.id}`)} caption={`${q.short} Latest Pass ${longDate(last(layer))}.`} />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    {!!q.classes.length && (
+                      <table className="w-full text-[11px]">
+                        <tbody>
+                          {q.classes.map((c) => (
+                            <tr key={c.value} className="border-t border-neutral-200 align-top first:border-0">
+                              <td className="py-1 pr-2"><span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: c.color }} /></td>
+                              <td className="py-1 pr-2 leading-snug">{c.label}</td>
+                              <td className="py-1 text-right font-mono">{(c.share * 100).toFixed(0)}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                    {q.ranked && q.ranked.rows.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[10.5px] font-medium">{q.ranked.title} (top {Math.min(8, q.ranked.rows.length)} of {q.ranked.total})</p>
+                        <table className="mt-1 w-full table-fixed text-[10px] leading-tight">
+                          <thead><tr className="text-left text-neutral-500">{q.ranked.columns.map((c) => <th key={c.key} className="pb-0.5 font-normal">{c.label}{c.unit ? ` (${c.unit})` : ""}</th>)}</tr></thead>
+                          <tbody>
+                            {q.ranked.rows.slice(0, 8).map((r, i) => (
+                              <tr key={i} className="border-t border-neutral-200">
+                                {q.ranked!.columns.map((c) => <td key={c.key} className={`truncate py-0.5 pr-1 ${typeof r[c.key] === "number" ? "font-mono" : ""}`}>{typeof r[c.key] === "number" ? (r[c.key] as number).toLocaleString("en-GB", { maximumFractionDigits: 1 }) : String(r[c.key] ?? "")}</td>)}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {q.point_only && <p className="text-[11px] text-neutral-700">Answered for one clicked spot on the interactive Study page (it ranks the steadiest ground within 2 km).</p>}
+                  </div>
+                </div>
+                {worst.length > 0 && (
+                  <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-2">
+                    {worst.slice(0, 2).map((c) => (
+                      <div key={c.value} className="min-w-0">
+                        <p className="text-[11px] font-semibold"><span className="mr-1 inline-block h-2.5 w-2.5 rounded-sm align-middle" style={{ background: c.color }} />Where it is &ldquo;{c.label}&rdquo;: what can be done</p>
+                        <ol className="mt-0.5 list-decimal space-y-0.5 pl-5 text-[10.5px] leading-snug text-neutral-800">
+                          {c.solutions.map((sid) => answers.solutions[sid] && (
+                            <li key={sid}><span className="font-medium">{answers.solutions[sid].title}</span> ({answers.solutions[sid].cost} cost). Check: {answers.solutions[sid].check} <span className="text-neutral-500">[{answers.solutions[sid].source}]</span></li>
+                          ))}
+                        </ol>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-1.5 text-[10px] leading-snug text-neutral-500">Limits: {q.limits.join(" ")} Sources: {q.sources.join("; ")}.</p>
+              </article>
+            );
+          })}
+          <p className="mt-4 text-[10px] text-neutral-500">{answers.attribution}</p>
+        </section>
+      )}
 
       {/* 4. Analysis plots */}
       <section className="page-part">

@@ -1,0 +1,15 @@
+# Who asks which questions, per Lens. The Ask panel shows one chip per role.
+subsidence:
+  - {id: buyer, label: "Home buyer or family", questions: [m1_safe_to_build, m2_what_to_build, m3_better_plots]}
+  - {id: developer, label: "Developer or architect", questions: [m2_what_to_build, m1_safe_to_build, m3_better_plots]}
+  - {id: infrastructure, label: "Metro, rail and canal operators", questions: [m4_lines_at_risk, m1_safe_to_build]}
+  - {id: planning, label: "Urban planning", questions: [m1_safe_to_build, m2_what_to_build, m4_lines_at_risk]}
+  - {id: civil_protection, label: "Civil protection", questions: [m1_safe_to_build, m4_lines_at_risk]}
+  - {id: insurer, label: "Insurer or bank", questions: [m1_safe_to_build, m2_what_to_build]}
+wildfire:
+  - {id: civil_protection, label: "Civil protection", questions: [a1_burned_slopes, a2_roads_to_watch]}
+  - {id: forestry, label: "Forestry service", questions: [a3_replant_first, a4_forest_recovery, a1_burned_slopes]}
+  - {id: council, label: "Local council", questions: [a1_burned_slopes, a2_roads_to_watch, a3_replant_first]}
+  - {id: roads, label: "Public works (roads)", questions: [a2_roads_to_watch]}
+  - {id: farmer, label: "Farmer", questions: [a4_forest_recovery, a3_replant_first]}
+  - {id: park, label: "National park", questions: [a3_replant_first, a4_forest_recovery]}

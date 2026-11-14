@@ -1,0 +1,40 @@
+id: m4_lines_at_risk
+title: "Which Metro, rail and canal segments cross uneven sinking?"
+short: "Each 250 m of line, ranked by years until uneven sinking along it reaches the limit."
+lens: subsidence
+recipe: lines_at_risk
+order: 4
+evidence: [vert_vel_cm_yr, osm_lines]
+context: [lines]
+thresholds:
+  segment_m: 250
+  red_years: 15
+  amber_years: 50
+  limit: 0.002           # 1/500
+classes:
+  - value: 1
+    label: "Routine checks (over 50 years)"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "Sinking along this segment is even."
+    solutions: [routine_watch]
+  - value: 2
+    label: "Watch (15-50 years to the limit)"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "Uneven sinking along the segment will reach the 1/500 limit within decades."
+    solutions: [monitoring_points, relevel_and_joints, canal_gradient_check]
+  - value: 3
+    label: "Inspect first (under 15 years)"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "Uneven sinking along the segment reaches the 1/500 limit within 15 years."
+    solutions: [inspect_segment_first, monitoring_points, relevel_and_joints, canal_gradient_check]
+sources:
+  - "Bjerrum, L. (1963). Allowable settlement of structures (1/500 limit)"
+  - "Lines from OpenStreetMap contributors (railway=subway, light_rail, tram; waterway=canal, drain), ODbL"
+limits:
+  - "Only the slope of sinking along the line is used; rails have tighter tolerances than buildings, so 'watch' segments may already need work."
+  - "OpenStreetMap lines may be incomplete or slightly offset."
+features: lines           # ranked items drawn on the map as lines
+status: prototype

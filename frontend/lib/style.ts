@@ -31,6 +31,7 @@ export const LENSES: Record<Lens, { label: string; color: string; pitch: string 
 };
 
 export const KIND_LABEL: Record<LayerInfo["kind"], string> = {
+  answer: "Answers to questions",
   prediction: "AI Model",
   baseline: "Baseline",
   physics: "Radar measurement",

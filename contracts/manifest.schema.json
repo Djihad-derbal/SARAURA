@@ -39,7 +39,7 @@
         "properties": {
           "id": {"type": "string", "pattern": "^[a-z0-9_]+$", "description": "Matches layers/<id>_<YYYY-MM-DD>.tif; predictions are pred_<lens>"},
           "label": {"type": "string"},
-          "kind": {"enum": ["physics", "baseline", "prediction", "context"], "description": "prediction = AI Model output; only allowed when kind=showcase (ADR-0001)"},
+          "kind": {"enum": ["physics", "baseline", "prediction", "context", "answer"], "description": "prediction = AI Model output; only allowed when kind=showcase (ADR-0001). answer = a Question's rule-based map (questions/*.yaml, ADR-0008)"},
           "unit": {"type": "string", "description": "Shown in the legend, e.g. dB, cm, 0-1, class"},
           "colormap": {"type": "string"},
           "range": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},

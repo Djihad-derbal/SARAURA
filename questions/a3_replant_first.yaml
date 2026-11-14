@@ -1,0 +1,47 @@
+id: a3_replant_first
+title: "Where should replanting start?"
+short: "Burned patches ranked by steepness, what lies downhill, and whether the forest is already coming back."
+lens: wildfire
+recipe: replant_first
+order: 3
+evidence: [burned, slope, dem_flow, hv_recovery, osm_places, osm_roads]
+context: [places, roads]
+thresholds:
+  steep_deg: 23
+  flow_cell_m: 60
+  channel_ha: 10         # a cell is a channel once 10 ha drain through it
+  recovering: 0.3
+  village_radius_m: 250
+classes:
+  - value: 1
+    label: "First: steep, and drains to a village or road"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "Bare steep ground whose runoff reaches people. Protect the soil now, plant after the rains."
+    solutions: [protect_soil_first, log_erosion_barriers, replant_native]
+  - value: 2
+    label: "Second: steep, or drains to a village or road"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "Either steep or upstream of people, not both."
+    solutions: [protect_soil_first, replant_native, natural_regrowth]
+  - value: 3
+    label: "Later: gentle and away from people"
+    color: "#ffffbf"
+    verdict: caution
+    meaning: "Lower risk; replant when resources allow."
+    solutions: [natural_regrowth, replant_native]
+  - value: 4
+    label: "Coming back on its own"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "Radar shows vegetation returning: protect it rather than plant."
+    solutions: [natural_regrowth, recheck_spring]
+sources:
+  - "Robichaud, Ashmun & Sims (2010), USDA Forest Service RMRS-GTR-240"
+  - "Staley et al. (2017): slopes of 23 degrees or more"
+limits:
+  - "Only about two months of data after the fire; recovery is a first sign, not a trend."
+  - "Autumn rain wets the soil and can look like regrowth on radar."
+features: points           # ranked items drawn on the map as points
+status: prototype

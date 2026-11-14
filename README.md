@@ -65,6 +65,15 @@ Explorer:
 | `GET /browse/timeseries?lon&lat` | Raw backscatter at a point for every Pass |
 | `POST /jobs`, `GET /jobs/{id}`, `GET /jobs` | An Analysis of a drawn area: the site pipeline with an optional Lens (physics + Baseline, never a Model, ADR-0001). Cached by Granules, area, product and Lens |
 
+Questions and answers (ADR-0008):
+
+| Route | What it returns |
+|---|---|
+| `GET /answers/{id}` (`?role=`) | Every Question for the study: headline, classes with area, ranked list, Solutions, sources, limits |
+| `GET /answers/{id}/at?lon&lat` | Each Question's answer at one spot: class, the measured numbers behind it, Solutions, and the better plots nearby |
+| `GET /answers/{id}/features/{question}` | A Question's ranked items as GeoJSON lines or points with class colours, for the map |
+| `GET /answers/{id}/places?q=` | Places in the study whose name matches (OpenStreetMap, both scripts, accents ignored) |
+
 Assistant and Report:
 
 | Route | What it returns |
@@ -104,6 +113,36 @@ coherent pixels when that area has too few reliable pixels.
 - Below zoom 13, tiles come from the file's built-in 80 m layer; from zoom 13
   they come from the full 10 m layer.
 - Everything fetched is kept on disk, so a second view is instant.
+
+## Questions and answers
+
+The same NISAR evidence answers different questions for different people. Each Question is a file in
+`questions/`, a rule recipe in `pipeline/answers.py` with its thresholds, sources and limits; each answer class
+offers several Solutions from `solutions/catalogue.yaml` (cost, source, what to check on the ground). Roles in
+`questions/roles.yaml` choose which Questions each user sees. The Study page opens on an "Ask this place" tab and
+the open Question's map, with place search (cached OpenStreetMap names, accents ignored), an on-map legend, an answer
+bubble at the clicked spot, and ranked items drawn as coloured lines or labelled points; the Report has a "Questions
+answered" chapter. No Model runs here (ADR-0008). The wildfire Questions also run on the Washington site with no new
+code (`--all`).
+
+```bash
+.venv/Scripts/python -m pipeline.answers mexico_city_subsidence   # or --all; run_site also runs it after a build
+```
+
+| Site | Question | Evidence | Headline (latest run) | Status |
+|---|---|---|---|---|
+| Mexico City | Is it safe to build here? | Vertical speed (line of sight / cos incidence), years to the 1/500 tilt limit, acceleration, fit error, coherence | 18% red, 38% amber, 29% blue, 16% not measurable | prototype |
+| Mexico City | What can I build here? | Same | Standard buildings fit 29% of the measured ground | prototype |
+| Mexico City | Are there better plots nearby? | Same, around a clicked spot | Up to 3 steadier spots within 2 km | prototype |
+| Mexico City | Which Metro, rail and canal segments cross uneven sinking? | Speed along OpenStreetMap lines, per 250 m | 37 km reach 1/500 within 15 years (Metro Lines A, 5 and 12 among the worst) | prototype |
+| Jijel | Which burned slopes could send mud onto villages this winter? | Burn map, slope >= 23 degrees, flow paths on Copernicus DEM (priority-flood), OSM villages | 12 villages beside a main mud path, 18 beside a smaller one | prototype |
+| Jijel | Which roads should be watched or closed in heavy rain? | Same, along OSM roads | 104 sections to close, 179 to watch | prototype |
+| Jijel | Where should replanting start? | Steepness, drains to people, HV recovery | 24,240 ha first | prototype |
+| Jijel | Is the forest coming back? | HV recovery since the post-fire Passes | Mostly not yet, two months after the fire | prototype |
+
+Team choices, stated as choices: speed limits of 5 and 20 cm/year; tilt from speed smoothed over 400 m and not used
+on slopes of 10 degrees or more; mud paths are channels in basins under 8 km2 with 15% (path) or 40% (main path) of
+their ground burned and steep. The 1/500 tilt limit is Bjerrum (1963); the 23-degree slope is Staley et al. (2017).
 
 ## Models (ml/)
 
@@ -145,7 +184,9 @@ pnpm --dir frontend install
 pnpm --dir frontend dev          # or: pnpm --dir frontend build && pnpm --dir frontend start
 ```
 
-Open http://localhost:3000. Set `NEXT_PUBLIC_API_URL` if the API is not at `http://127.0.0.1:8000`,
+Open http://localhost:3000. Routes: `/` Places (decisions first), `/place/<id>` a place's questions
+(`?role=&q=` to share a view), `/explore` the Research explorer, `/study/<id>` a site's research view,
+`/browse` raw Granules, `/models` Model scores, `/report/<id>` the printable Report. Set `NEXT_PUBLIC_API_URL` if the API is not at `http://127.0.0.1:8000`,
 and `SARS_FRONTEND_URL` on the API if the frontend is not at `http://127.0.0.1:3000` (the PDF
 Report prints the frontend's `/report/{id}` page).
 

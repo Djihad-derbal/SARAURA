@@ -48,7 +48,7 @@ const OWN_LAYERS: Layer[] = [
     type: "line",
     source: "footprints",
     paint: {
-      "line-color": ["case", ["get", "selected"], "#f59e0b", "#ffffff"],
+      "line-color": ["case", ["get", "selected"], "#2dd4bf", "#ffffff"],
       "line-opacity": ["case", ["get", "selected"], 0.9, 0.22],
       "line-width": ["case", ["get", "selected"], 1.6, 1],
     },
@@ -73,7 +73,7 @@ async function buildStyle(): Promise<StyleSpecification> {
   } catch {
     // Offline or blocked: fall back to the globe imagery alone.
   }
-  const layers = base?.layers ?? [{ id: "bg", type: "background", paint: { "background-color": "#05070a" } } as Layer];
+  const layers = base?.layers ?? [{ id: "bg", type: "background", paint: { "background-color": "#04111a" } } as Layer];
   const onTop = (l: Layer) => (l.type === "symbol" && !/^road_|^highway_name/.test(l.id)) || l.id.startsWith("boundary_");
   const drop = (l: Layer) => l.type === "symbol" && /^road_|^highway_name/.test(l.id);
   return {
@@ -169,7 +169,7 @@ export default function MapView(props: Props) {
           m.setSky({
             "sky-color": "#0a1322",
             "horizon-color": "#16263d",
-            "fog-color": "#05070a",
+            "fog-color": "#04111a",
             "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 0.8, 8, 0],
           });
         } catch {

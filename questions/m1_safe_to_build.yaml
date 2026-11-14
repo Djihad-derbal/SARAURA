@@ -1,0 +1,51 @@
+id: m1_safe_to_build
+title: "Is it safe to build here?"
+short: "A traffic light for any plot, from how fast and how unevenly the ground sinks."
+lens: subsidence
+recipe: safe_to_build
+order: 1
+evidence: [vert_vel_cm_yr, tilt_years_500, accel_cm_yr2, fit_se_cm_yr, mean_coherence]
+thresholds:
+  red_years: 15          # uneven sinking reaches the 1/500 crack limit in under 15 years
+  amber_years: 50
+  red_speed_cm_yr: 20    # sinking faster than 20 cm/year
+  amber_speed_cm_yr: 5
+  accel_cm_yr2: 15       # sinking speeding up by more than 15 cm/year each year (one year of data is noisy)
+  min_coherence: 0.3
+  max_fit_se_cm_yr: 3
+classes:
+  - value: 1
+    label: "Build normally"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "The ground is steady: little sinking and no uneven tilt that would crack walls within 50 years."
+    solutions: [standard_foundation, yearly_ground_check]
+  - value: 2
+    label: "Build with conditions"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "The ground sinks steadily or tilts slowly. Buildings are possible with the right foundation and flexible connections."
+    solutions: [compensated_foundation, flexible_connections, soil_study_first, yearly_ground_check]
+  - value: 3
+    label: "Avoid, or special design only"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "The ground sinks fast or tilts unevenly enough to crack walls within about 15 years."
+    solutions: [choose_better_plot, avoid_rigid_tall, soil_study_first, light_flexible_structure]
+  - value: 4
+    label: "Not enough radar data"
+    color: "#9ca3af"
+    verdict: unknown
+    meaning: "The radar could not measure this spot reliably."
+    solutions: [more_data_needed]
+sources:
+  - "Bjerrum, L. (1963). Allowable settlement of structures. Proc. European Conf. on Soil Mechanics and Foundation Engineering, Wiesbaden, 3, 135-137 (tilt limits 1/500, 1/300, 1/150)"
+  - "Chaussard, E. et al. (2014). Land subsidence in central Mexico detected by ALOS InSAR time-series. Remote Sensing of Environment 140, 94-106"
+  - "Cigna, F. & Tapete, D. (2021). Present-day land subsidence rates, surface faulting hazard and risk in Mexico City with 2014-2020 Sentinel-1 IW InSAR. Remote Sensing of Environment 253"
+limits:
+  - "Speed thresholds (5 and 20 cm/year) are team choices; the tilt limit is Bjerrum's 1/500 for buildings that must not crack."
+  - "Tilt is measured between 80 m pixels, so it is a lower bound for one building's footprint."
+  - "Line-of-sight motion is turned into vertical motion assuming the ground moves straight down (true for clay compaction, not for landslides)."
+  - "One year of data (28 Passes): speeding up is only a first sign until a second year arrives, so it only moves 'Build normally' to 'Build with conditions'."
+  - "On slopes of 10 degrees or more the tilt is not used (hillside motion is not vertical; terrain-related radar delay adds noise): those spots read 'Not enough radar data'."
+status: prototype

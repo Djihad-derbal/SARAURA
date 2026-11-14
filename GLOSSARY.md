@@ -62,6 +62,22 @@ A training label not observed on the ground (derived from optical imagery or han
 A grounded explainer that answers questions about the Showcase Site or Analysis on screen, using only its manifest, statistics, rule-based insights and Model card; it quotes numbers, never computes them.
 _Avoid_: Chatbot, AI (ambiguous with Model)
 
+**Question**:
+Something a person asks of a Study ("Is it safe to build here?"), answered by a rule recipe over evidence layers with stated thresholds. It gives a map of classes, a ranked list where useful, and an answer at any clicked spot (questions/*.yaml, ADR-0008).
+_Avoid_: Query, use case, AI answer
+
+**Evidence**:
+Layers derived from a site's measurements that Questions read, such as vertical speed, years to the 1/500 tilt limit, burned steep ground upstream, or forest recovery. Physics and rules only.
+_Avoid_: Features (ML word)
+
+**Solution**:
+One option a Question offers for a class. It states its cost (low, medium or high), its source, and what to check on the ground (solutions/catalogue.yaml). It is a starting point, never an engineering design.
+_Avoid_: Recommendation, fix
+
+**Role**:
+A kind of user (home buyer, civil protection, forestry service...) and the Questions they see first (questions/roles.yaml).
+_Avoid_: Persona, user type
+
 **Status**:
 How far to trust a feature or Model: operational (validated against a Baseline or reference data) or prototype (works, not validated).
 _Avoid_: Planned (there is no planned status)

@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import { HomeLoader } from "@/components/Loaders";
+import { LandingLoader } from "@/components/Loaders";
 
 export default function Page() {
   return (
     <Suspense>
-      <HomeLoader />
+      <LandingLoader />
     </Suspense>
   );
 }

@@ -1,0 +1,51 @@
+id: m2_what_to_build
+title: "What can I build here?"
+short: "Which kind of building and foundation the ground can carry."
+lens: subsidence
+recipe: what_to_build
+order: 2
+evidence: [vert_vel_cm_yr, tilt_years_500, fit_se_cm_yr, mean_coherence]
+thresholds:
+  red_years: 15
+  amber_years: 50
+  amber_speed_cm_yr: 5
+  min_coherence: 0.3
+  max_fit_se_cm_yr: 3
+classes:
+  - value: 1
+    label: "Any standard building"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "Steady ground: a normal foundation to the building code."
+    solutions: [standard_foundation, yearly_ground_check]
+  - value: 2
+    label: "Most buildings, with flexible connections"
+    color: "#abd9e9"
+    verdict: caution
+    meaning: "The whole block sinks together. Buildings stay level, but pipes, drains and entrances tear where they meet the street."
+    solutions: [flexible_connections, compensated_foundation, yearly_ground_check]
+  - value: 3
+    label: "Light 1-3 storeys on a raft or floating foundation"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "The ground tilts slowly: in 15 to 50 years it reaches the 1/500 crack limit."
+    solutions: [compensated_foundation, light_flexible_structure, soil_study_first]
+  - value: 4
+    label: "Only light, flexible structures after a soil study"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "The ground tilts fast: under 15 years to the crack limit. Tall or rigid buildings would crack."
+    solutions: [avoid_rigid_tall, light_flexible_structure, soil_study_first, choose_better_plot]
+  - value: 5
+    label: "Not enough radar data"
+    color: "#9ca3af"
+    verdict: unknown
+    meaning: "The radar could not measure this spot reliably."
+    solutions: [more_data_needed]
+sources:
+  - "Bjerrum, L. (1963). Allowable settlement of structures (tilt limits)"
+  - "Zeevaert, L. (1983). Foundation Engineering for Difficult Subsoil Conditions, 2nd ed. (compensated foundations on Mexico City clay)"
+limits:
+  - "A screening, not a foundation design: the building code still requires a soil study."
+  - "The official soil zones (hills, transition, lake) are not used yet; the radar shows how the ground behaves, not what it is made of."
+status: prototype

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "saraura/solutions.schema.json",
+  "title": "Solutions catalogue (solutions/catalogue.yaml)",
+  "description": "Options a Question can offer. Each states its source and what to check on the ground; none is an engineering design.",
+  "type": "object",
+  "propertyNames": {"pattern": "^[a-z][a-z0-9_]{2,40}$"},
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["title", "what", "cost", "source", "check"],
+    "properties": {
+      "title": {"type": "string", "maxLength": 80},
+      "what": {"type": "string"},
+      "cost": {"enum": ["low", "medium", "high"]},
+      "source": {"type": "string"},
+      "check": {"type": "string"}
+    }
+  }
+}

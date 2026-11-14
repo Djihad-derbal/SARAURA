@@ -58,7 +58,24 @@ def sites():
             continue
         m = json.loads(config.data.read_text(f"{sid}/manifest.json"))
         b = m["bbox"]
+        # Questions answered here (ADR-0008): what the Places home page leads with
+        decide = None
+        if config.data.exists(f"{sid}/answers/answers.json"):
+            a = json.loads(config.data.read_text(f"{sid}/answers/answers.json"))
+            first = next((q for q in a["questions"] if q.get("layer")), None)
+            decide = {
+                "date": a["date"],
+                "questions": [{"id": q["id"], "title": q["title"], "headline": q["headline"], "layer": q.get("layer")} for q in a["questions"]],
+                "roles": [{"id": r["id"], "label": r["label"], "first": r["questions"][0]} for r in a["roles"]],
+                "cover_layer": first["layer"] if first else None,
+            }
+        try:
+            hook = site_configs.load(sid).get("hook")
+        except Exception:
+            hook = None
         out.append({
+            "hook": hook,
+            "decide": decide,
             "id": sid, "name": m["name"], "lens": m["lens"], "view": m["view"], "bbox": b, "center": [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2],
             "event_date": m.get("event_date"), "passes": len(m["passes"]), "first": m["passes"][0]["date"], "last": m["passes"][-1]["date"],
             "headline": (m.get("insights") or [None])[0], "has_model": any(l["kind"] == "prediction" for l in m["layers"]),

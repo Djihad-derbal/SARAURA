@@ -1,0 +1,36 @@
+id: a4_forest_recovery
+title: "Is the forest coming back?"
+short: "How much of the vegetation signal lost in the fire has returned since."
+lens: wildfire
+recipe: forest_recovery
+order: 4
+evidence: [burned, hv_db]
+thresholds:
+  recovering: 0.3        # 30% or more of the lost HV has returned
+  slow: 0.1
+  min_drop_db: 1.5
+classes:
+  - value: 1
+    label: "Coming back (30% or more of the lost signal)"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "Vegetation scattering has risen well above its post-fire low."
+    solutions: [natural_regrowth, recheck_spring]
+  - value: 2
+    label: "Slow (10-30%)"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "Some return, not much yet."
+    solutions: [recheck_spring, natural_regrowth, compensation_list]
+  - value: 3
+    label: "Not yet (under 10%)"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "No sign of vegetation returning yet."
+    solutions: [protect_soil_first, replant_native, compensation_list]
+sources:
+  - "HV (cross-polarised) backscatter tracks woody and leafy volume; NASA Earthdata SAR introduction"
+limits:
+  - "Only about two months after the fire, in autumn: wet soil can raise the signal without regrowth."
+  - "Recovery is computed on 60 m blocks to calm speckle."
+status: prototype

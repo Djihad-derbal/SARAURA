@@ -1,7 +1,8 @@
 """Validate SARAURA contract files: Showcase Site configs, manifests, Model cards, time-series parquet.
 
 Usage (from the repo root):
-    python contracts/validate.py                      # every sites/*.yaml, ml/model_cards/*.json, data/*/manifest.json
+    python contracts/validate.py                      # every sites/*.yaml, ml/model_cards/*.json, data/*/manifest.json,
+                                                      # questions/*.yaml and solutions/catalogue.yaml
     python contracts/validate.py sites/venezuela_eq.yaml contracts/examples/manifest.json
 
 The kind of each file is inferred from its name and location. Exit code 1 if anything fails.
@@ -142,8 +143,56 @@ def check_parquet(path: Path) -> list[str]:
     return errs[:20]
 
 
+def _yaml(path: Path):
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def check_question(path: Path) -> list[str]:
+    doc = _yaml(path)
+    errs = _schema_errors("question", doc)
+    if errs:
+        return errs
+    if doc["id"] != path.stem:
+        errs.append(f"id: '{doc['id']}' must equal the file name '{path.stem}'")
+    catalogue = _yaml(ROOT / "solutions" / "catalogue.yaml") or {}
+    used = [s for c in doc["classes"] for s in c["solutions"]] + doc.get("solutions", [])
+    errs += [f"solutions: '{s}' is not in solutions/catalogue.yaml" for s in sorted(set(used) - set(catalogue))]
+    values = [c["value"] for c in doc["classes"]]
+    if len(values) != len(set(values)):
+        errs.append("classes: values must be unique")
+    if doc.get("point_only") and doc["classes"]:
+        errs.append("classes: a point_only question has no map, so no classes")
+    if not doc.get("point_only") and not doc["classes"]:
+        errs.append("classes: a mapped question needs classes")
+    return errs
+
+
+def check_solutions(path: Path) -> list[str]:
+    return _schema_errors("solutions", _yaml(path))
+
+
+def check_roles(path: Path) -> list[str]:
+    doc = _yaml(path)
+    errs = _schema_errors("roles", doc)
+    if errs:
+        return errs
+    questions = {p.stem: _yaml(p) for p in path.parent.glob("*.yaml") if p.name != "roles.yaml"}
+    for lens, roles in doc.items():
+        for r in roles:
+            for q in r["questions"]:
+                if q not in questions:
+                    errs.append(f"{lens}/{r['id']}: no questions/{q}.yaml")
+                elif questions[q].get("lens") != lens:
+                    errs.append(f"{lens}/{r['id']}: {q} belongs to the {questions[q].get('lens')} Lens")
+    return errs
+
+
 def kind_of(path: Path) -> str:
     if path.suffix in (".yaml", ".yml"):
+        if path.parent.name == "questions":
+            return "roles" if path.stem == "roles" else "question"
+        if path.parent.name == "solutions":
+            return "solutions"
         return "site"
     if path.suffix == ".parquet":
         return "parquet"
@@ -154,7 +203,10 @@ def kind_of(path: Path) -> str:
     raise ValueError(f"Cannot tell what kind of contract file {path} is")
 
 
-CHECKS = {"site": check_site, "manifest": check_manifest, "model_card": check_model_card, "parquet": check_parquet}
+CHECKS = {
+    "site": check_site, "manifest": check_manifest, "model_card": check_model_card, "parquet": check_parquet,
+    "question": check_question, "solutions": check_solutions, "roles": check_roles,
+}
 
 
 def default_files() -> list[Path]:
@@ -163,6 +215,8 @@ def default_files() -> list[Path]:
         + sorted((ROOT / "ml" / "model_cards").glob("*.json"))
         + sorted((ROOT / "data").glob("*/manifest.json"))
         + sorted((HERE / "examples").glob("*.json"))
+        + sorted((ROOT / "questions").glob("*.yaml"))
+        + [ROOT / "solutions" / "catalogue.yaml"]
     )
 
 
