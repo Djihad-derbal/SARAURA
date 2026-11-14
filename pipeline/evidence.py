@@ -10,6 +10,9 @@ Subsidence (from the GUNW series):
 Wildfire (from GCOV, the burn map and the elevation model), on a 60 m grid:
   mud_upstream_ha    burned ground on slopes >= 23 degrees draining through each cell (ha)
   hv_recovery        share of the HV lost in the fire that has returned since (0-1)
+  burned_upstream_ha all burned ground draining through each cell (ha): mud reaching rivers and dams (A7)
+  edge_upstream      1 where part of the catchment lies beyond the edge of the map, so upstream shares are partial
+  dhv60, dhh60       HV and HH change between the last two Passes on 60 m blocks (dB): what changed (A9)
 
 Everything here is physics or rules on measured layers; no Model runs (ADR-0001, ADR-0005).
 """
@@ -67,6 +70,7 @@ LAYERS.update({
 
 STEEP_DEG = 23.0
 FLOW_CELL_M = 60.0
+NOISE_FLOOR_DB = -27.0  # HV below this in both Passes is near the radar's noise floor (water, radar shadow): no change measured
 
 
 # ---------------------------------------------------------------- shared helpers
@@ -318,6 +322,28 @@ def reaches(mask: np.ndarray, rcv: np.ndarray, order: np.ndarray) -> np.ndarray:
     return np.asarray(hit, bool).reshape(mask.shape)
 
 
+def inflow_cells(z: np.ndarray, land: np.ndarray) -> np.ndarray:
+    """1 for interior land cells next to a higher land cell on the map's border: water from beyond the edge flows in
+    there (the routing treats the border as an outlet, so that inflow is not counted, only flagged)."""
+    H, W = z.shape
+    border = np.zeros((H, W), bool)
+    border[[0, -1], :] = True
+    border[:, [0, -1]] = True
+    out = np.zeros((H, W), np.float32)
+    zz = np.where(land, z, np.nan)
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            if dr == dc == 0:
+                continue
+            # neighbour b = (r + dr, c + dc) of cell n = (r, c)
+            n_sl = (slice(max(0, -dr), H - max(0, dr)), slice(max(0, -dc), W - max(0, dc)))
+            b_sl = (slice(max(0, dr), H - max(0, -dr)), slice(max(0, dc), W - max(0, -dc)))
+            with np.errstate(invalid="ignore"):
+                hit = border[b_sl] & ~border[n_sl] & (zz[b_sl] > zz[n_sl])
+            out[n_sl][hit] = 1
+    return out
+
+
 def wildfire(site_id: str, m: dict, site: dict, log=print) -> dict:
     from .dem import fetch_dem
 
@@ -341,9 +367,11 @@ def wildfire(site_id: str, m: dict, site: dict, log=print) -> dict:
     rcv, order = priority_flood(dem60.astype(np.float64))
     upstream = accumulate(steep_burned * cell_ha, rcv, order)
     drainage = accumulate(np.full(g60["shape"], cell_ha, np.float32), rcv, order)
+    burned_up = accumulate(burned_share * cell_ha, rcv, order)
     land = np.isfinite(dem60) & (dem60 > 0)
-    upstream[~land] = np.nan
-    drainage[~land] = np.nan
+    edge_up = (accumulate(inflow_cells(dem60, land), rcv, order) > 0).astype(np.float32)  # rivers entering from beyond the map
+    for a in (upstream, drainage, burned_up, edge_up):
+        a[~land] = np.nan
 
     # HV recovery on 60 m blocks (linear power, then dB)
     rec = np.full(g60["shape"], np.nan, np.float32)
@@ -361,9 +389,25 @@ def wildfire(site_id: str, m: dict, site: dict, log=print) -> dict:
             with np.errstate(invalid="ignore", divide="ignore"):
                 rec = np.clip((now - after) / drop, -0.5, 1.5).astype(np.float32)
             rec[~(drop >= 1.5) | (burned_share < 0.5)] = np.nan
+    # change since the previous Pass, on 60 m blocks (linear power, then dB); blocks without signal in both are blank
+    dhv = np.full(g60["shape"], np.nan, np.float32)
+    dhh = np.full(g60["shape"], np.nan, np.float32)
+    prev = None
+    hh_l = layer(m, "hh_db")
+    if hv_l and hh_l and len(hv_l["dates"]) >= 2 and len(hh_l["dates"]) >= 2:
+        prev, now_d = hv_l["dates"][-2], hv_l["dates"][-1]
+
+        def bdb(name, d):
+            return 10 * np.log10(np.maximum(block_mean(10 ** (read(site_id, name, d) / 10), k), 1e-6))
+        hv0, hv1 = bdb("hv_db", prev), bdb("hv_db", now_d)
+        dhv, dhh = hv1 - hv0, bdb("hh_db", now_d) - bdb("hh_db", prev)
+        dark = (hv0 < NOISE_FLOOR_DB) & (hv1 < NOISE_FLOOR_DB)
+        dhv[dark | ~land] = np.nan
+        dhh[dark | ~land] = np.nan
     out = {"mud_upstream_ha": upstream, "hv_recovery": rec, "burned_share": burned_share, "steep_burned_share": steep_burned,
-           "drainage_ha": drainage, "dem60": dem60.astype(np.float32)}
-    for name in ("mud_upstream_ha", "hv_recovery", "burned_share", "steep_burned_share", "drainage_ha"):
+           "drainage_ha": drainage, "dem60": dem60.astype(np.float32), "burned_upstream_ha": burned_up, "edge_upstream": edge_up,
+           "dhv60": dhv.astype(np.float32), "dhh60": dhh.astype(np.float32), "burned20": burned}
+    for name in ("mud_upstream_ha", "hv_recovery", "burned_share", "steep_burned_share", "drainage_ha", "burned_upstream_ha", "edge_upstream", "dhv60", "dhh60"):
         export.write_cog(site_id, f"{name}_{last}", out[name], g60, sub="layers" if name in ("mud_upstream_ha", "hv_recovery") else "evidence")
     f = np.isfinite(rec)
     log(f"  evidence: {np.nansum(steep_burned) * cell_ha:,.0f} ha burned on slopes >= {STEEP_DEG:.0f} deg; "
@@ -371,6 +415,8 @@ def wildfire(site_id: str, m: dict, site: dict, log=print) -> dict:
     return {
         "date": last,
         "grid": g60,
+        "grid20": g20,
+        "prev_date": prev,
         "k": k,
         "arrays": out,
         "flow": (rcv, order),

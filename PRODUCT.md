@@ -49,6 +49,7 @@ The radar passes every 12 days, through cloud, smoke and darkness, so the answer
 | 10 | Earth-science look with animation | Deep-ocean palette with a teal "radar" accent (never amber, so it can't be confused with the caution colour on answer maps); Space Grotesk headings; graticule and contour backdrops | |
 | 11 | A big Earth hero, one application per scroll | A scroll story: a 3D NASA Earth ("Earth, through NISAR's eye") that flies to each place, with animated isometric scenes for Mexico City (sinking city) and Jijel (after the fire), and buttons straight into each place's questions | Shows what the radar solves before asking anyone to read a map |
 | 12 | A theme per chapter | City at dusk (Mexico City), embers (Jijel), misty pines (Washington). Colours, buttons and the Earth's glow fade between them | Each application feels like its own subject |
+| 13 | Scale the Algeria fire application | Built A5 (farms), A7 (rivers and dams) and A9 (since the last Pass): the questions the current data can answer. A6 needs a GUNW run, A8 spring Passes | Each new question reuses the evidence pass; two new recipes plus OSM fields and water |
 
 ---
 
@@ -139,17 +140,21 @@ Rebuild the answers after a site build with `python -m pipeline.answers <site>` 
 | **A2 Which roads should be watched or closed in heavy rain?** | 500 m road sections crossing a mud path, ranked | 104 sections to close in heavy rain, 179 to watch |
 | **A3 Where should replanting start?** | Burned patches ranked by steepness, what lies downhill, and whether they are already recovering | 24,240 ha to replant first |
 | **A4 Is the forest coming back?** | Recovering: 30% or more of the lost HV has returned; slow: 10–30%; requires a drop of at least 1.5 dB | Median recovery 0.02: almost nothing has come back yet |
+| **A5 Which farms lost their cover?** | Each OpenStreetMap field, orchard and meadow gets the share of its 20 m pixels that burned: mostly (50% or more), partly (10–50%), not burned | 113 fields mostly burned and 6 partly: 119 ha of the 4,508 ha mapped, about half of it orchards. OSM maps only part of the farms |
+| **A7 Is mud heading to the rivers and the dams?** | Burned and burned-steep ground upstream of every river (800 ha or more), reservoir and river mouth; heavy at 10% or more of the catchment burned and steep, some at 3–10%. Catchments fed from beyond the map are marked partial. Tapping a spot says which dam or river mouth its rain ends in | 6 of 26 reservoirs and mouths heavy, led by the mouth near El Kennar (29%) and Barrage El Agrem (24%); Tabellout gets the most burned steep ground of any dam (1,621 ha, partial); Kissir and Boussiaba almost none; about 172 km of river heavy |
+| **A9 What changed since the last Pass?** | HV and HH change between the last two Passes on 60 m blocks; 3 dB is about four times the Pass-to-Pass noise (0.7 dB HV). Classes: vegetation fell, surface darker, surface brighter, vegetation rose; lone blocks dropped | 19 Oct to 31 Oct: 58 ha lost vegetation signal and 87 ha turned darker, 29 of those patches near villages or roads; 1,921 ha brighter, mostly wet soil after rain |
 
 - **Roles:**
   - civil protection;
   - forestry service;
   - local council;
   - public works (roads);
-  - farmer;
+  - farmer or agricultural services (A5);
+  - dam and water agency (A7);
   - national park.
 
 ### Washington (Sinlahekin Fire): the same questions on another fire
-The A1–A4 question files ran with **no new code**. It found no mapped village within 250 m of a mud path, and 3,151 ha of burned steep slopes as mud sources. This is the proof that the questions travel.
+The A1–A5, A7 and A9 question files ran with **no new code**: A7 ranks Conners Lake first among the reservoirs (1,184 ha of burned steep ground upstream) and A9 finds 169 ha of lost vegetation signal between 5 and 17 Oct. It found no mapped village within 250 m of a mud path, and 3,151 ha of burned steep slopes as mud sources. This is the proof that the questions travel.
 
 ---
 
@@ -200,13 +205,16 @@ The A1–A4 question files ran with **no new code**. It found no mapped village 
 - **Validation to add:** GNSS stations; the official soil zones, to show where the ground behaves worse than its zone suggests.
 
 ### 6.3 Jijel: next questions
+
+A5, A7 and A9 are **built** (section 4). A6 and A8 wait for data.
+
 | # | Question | Evidence | Solutions | Needs |
 |---|---|---|---|---|
-| A5 | Which farms lost their cover? | Burn map × fields | List for compensation, burned hectares per field | Field boundaries |
+| A5 ✅ | Which farms lost their cover? | Burn map × fields | List for compensation, burned hectares per field | Field boundaries |
 | A6 | Did a slope move after rain? | Coherence loss + backscatter change on slopes (+ GUNW) | Inspection, evacuation, road closure | A GUNW run (forest coherence is low in the rainy season, so flag it) |
-| A7 | Is mud heading to the rivers and the Beni Haroun dam? | Burned share of each basin above Oued El Kebir and Beni Haroun | Sediment traps, reservoir watch | Already possible from the flow routing |
+| A7 ✅ | Is mud heading to the rivers and the Beni Haroun dam? | Burned share of each basin above Oued El Kebir and Beni Haroun | Sediment traps, reservoir watch | Already possible from the flow routing |
 | A8 | Where is fuel building up before next summer? | HV regrowth of shrubs near villages | Firebreaks, clearing near homes, where to place firefighting teams | Spring Passes |
-| A9 | What changed since the last Pass? | New Pass vs previous | Who to notify | Pass-by-Pass rebuilds |
+| A9 ✅ | What changed since the last Pass? | New Pass vs previous | Who to notify | Pass-by-Pass rebuilds |
 
 - **The fire year:**
   - **winter rains:** A1, A2, A6 and A7, updated every Pass; the radar sees through winter cloud;
@@ -214,7 +222,8 @@ The A1–A4 question files ran with **no new code**. It found no mapped village 
   - **May–June:** A8;
   - **fire season:** new burn mapping through smoke;
   - **year 2:** a full recovery curve.
-- **New users:** the dam and water agency (ANBT) for A7.
+- **New users:** the dam and water agency (ANBT) for A7, now a role; farmers and the agricultural services for A5.
+- **Next for these questions:** the real field map from the agricultural services would replace OpenStreetMap in A5; a larger elevation model would close A7's partial catchments (Beni Haroun, El Kebir); A9 should keep a change only if the next Pass confirms it.
 - **Scales:**
   - slope or field: decision card;
   - commune: ranked lists;

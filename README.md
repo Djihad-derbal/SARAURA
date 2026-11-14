@@ -140,6 +140,9 @@ code (`--all`).
 | Jijel | Which roads should be watched or closed in heavy rain? | Same, along OSM roads | 104 sections to close, 179 to watch | prototype |
 | Jijel | Where should replanting start? | Steepness, drains to people, HV recovery | 24,240 ha first | prototype |
 | Jijel | Is the forest coming back? | HV recovery since the post-fire Passes | Mostly not yet, two months after the fire | prototype |
+| Jijel | Which farms lost their cover? | Burn map (20 m) x OSM fields and orchards | 113 fields mostly burned, 6 partly; 119 ha of the 4,508 ha mapped | prototype |
+| Jijel | Is mud heading to the rivers and the dams? | Burned and burned-steep ground upstream (flow routing), OSM reservoirs and rivers | 6 of 26 reservoirs and river mouths have 10%+ of their catchment burned and steep; El Agrem worst among dams | prototype |
+| Jijel | What changed since the last Pass? | HV and HH change between the last two Passes, 60 m blocks, 3 dB | 58 ha lost vegetation signal, 87 ha darker; 29 patches near villages or roads | prototype |
 
 Team choices, stated as choices: speed limits of 5 and 20 cm/year; tilt from speed smoothed over 400 m and not used
 on slopes of 10 degrees or more; mud paths are channels in basins under 8 km2 with 15% (path) or 40% (main path) of

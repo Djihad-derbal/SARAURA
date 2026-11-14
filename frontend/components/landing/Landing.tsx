@@ -104,6 +104,8 @@ const CHAPTERS: Chapter[] = [
     roles: [
       { label: "Civil protection", role: "civil_protection", q: "a1_burned_slopes" },
       { label: "Forestry service", role: "forestry", q: "a3_replant_first" },
+      { label: "Dam and water agency", role: "water", q: "a7_mud_to_water" },
+      { label: "Farmer", role: "farmer", q: "a5_farms_burned" },
     ],
   },
   {

@@ -55,7 +55,7 @@ ISRO Bhoonidhi (S-band, pending)           per site         COGs, parquet,      
 - **Models plug in through files only:** prediction COGs plus a Model card JSON. The app never imports model code ([ADR-0005](docs/adr/0005-models-integrate-through-files.md)).
 - **Assistant:** Gemini `gemini-3.6-flash`, called server-side. It only sees the current Site or Analysis, quotes numbers but never computes them, and is badged "prototype" ([ADR-0006](docs/adr/0006-grounded-assistant.md)).
 - **Report:** a Next.js `/report` page rendered to PDF by Playwright inside `api/`. There is no CSV export ([ADR-0007](docs/adr/0007-pdf-report-via-headless-chromium.md)).
-- **Questions:** one evidence pass per site answers many **Questions** (`questions/*.yaml`, rule recipes in `pipeline/answers.py`), each with several cited **Solutions** (`solutions/catalogue.yaml`) and **Roles** that pick what each user sees. They are rules, not Models ([ADR-0008](docs/adr/0008-questions-as-rules-over-evidence.md)). Built for Mexico City and Jijel (2026-11-14).
+- **Questions:** one evidence pass per site answers many **Questions** (`questions/*.yaml`, rule recipes in `pipeline/answers.py`), each with several cited **Solutions** (`solutions/catalogue.yaml`) and **Roles** that pick what each user sees. They are rules, not Models ([ADR-0008](docs/adr/0008-questions-as-rules-over-evidence.md)). Built for Mexico City (M1-M4) and Jijel (A1-A5, A7, A9) (2026-11-14).
 - **Storage:** behind an interface: local disk now, object storage later. The Analysis area limit is a config value set from measured seconds per km² for each product.
 
 ## What already exists in the repo (updated 2026-11-13, after Phase 0)

@@ -184,3 +184,72 @@ compensation_list:
   cost: low
   source: "Team practice"
   check: "Field boundaries and owners."
+
+# ---------------------------------------------------------------- farms after a wildfire (A5)
+
+cover_burned_fields:
+  title: "Cover burned fields before the rains"
+  what: "Spread straw or sow a fast cover crop (barley or oats) on burned fields, and plough along the contour on slopes, so winter rain does not wash the topsoil away."
+  cost: low
+  source: "Shakesby (2011), Post-wildfire soil erosion in the Mediterranean, Earth-Science Reviews 105, 71-100: most soil is lost in the first autumn and winter storms"
+  check: "Bare soil and ash left on the field; how steep it is."
+
+orchard_tree_check:
+  title: "Check orchard trees before cutting them down"
+  what: "Fire-scorched olive and fruit trees often resprout from the trunk or the base. Scrape the bark near the ground: moist green wood underneath means the tree may live. Wait until spring before uprooting."
+  cost: low
+  source: "Agricultural extension practice for fire-damaged orchards; olive trees resprout from the base after fire"
+  check: "Green wood under the bark at the trunk base; new shoots in spring."
+
+firebreak_field_edge:
+  title: "Keep a clear strip between the field and the forest"
+  what: "A ploughed or grazed strip along the forest edge stops the next summer's fire from running into the field."
+  cost: low
+  source: "Mediterranean fire-prevention practice; local forestry service"
+  check: "Dry grass and brush along the field edge before June."
+
+# ---------------------------------------------------------------- rivers and dams after a wildfire (A7)
+
+reservoir_turbidity_watch:
+  title: "Watch turbidity at the dam and the water plant after storms"
+  what: "Burned catchments send ash, sediment and nutrients into reservoirs in the first storms. Sample turbidity at the intake after each heavy rain and plan extra treatment, or draw from another depth or source while it is high."
+  cost: low
+  source: "Smith et al. (2011), Wildfire effects on water quality in forest catchments, Journal of Hydrology 396, 170-192"
+  check: "Turbidity at the intake after the first big storm, compared with last winter."
+
+riverbank_buffer:
+  title: "Protect and replant the riverbanks first"
+  what: "Keep grazing off the burned banks and replant a strip along the river below the burned slopes: living roots hold the banks and catch sediment before it reaches the water."
+  cost: medium
+  source: "Shakesby (2011), Earth-Science Reviews 105, 71-100; riparian buffer practice"
+  check: "Burned or collapsing banks along the river below the fire."
+
+river_normal_watch:
+  title: "Keep the normal river watch"
+  what: "Little of this river's catchment burned on steep ground, so the fire adds little sediment. Keep the usual flood and water-quality checks."
+  cost: low
+  source: "Team practice"
+  check: "Next routine water-quality sample."
+
+# ---------------------------------------------------------------- what changed since the last Pass (A9)
+
+field_check_change:
+  title: "Look at the changed patch on the ground"
+  what: "A sudden radar change can be a new fire, cleared land, a slope that slipped or fresh mud. Send a team or check the next cloud-free optical image before acting."
+  cost: low
+  source: "Team practice; NISAR repeats every 12 days through cloud and smoke"
+  check: "What is on the ground at the patch: scorch, cut trees, a scar on the slope, or mud."
+
+notify_after_pass:
+  title: "Send the changed patches to civil protection and the commune"
+  what: "After each Pass, share the list of changed patches near villages and roads with the services that can act on them."
+  cost: low
+  source: "Team practice"
+  check: "Who is responsible for each village and road on the list."
+
+confirm_next_pass:
+  title: "Confirm with the next Pass"
+  what: "Rain on leaves or soil at the time of a Pass can change the signal for a day. If the change is still there 12 days later, it is real."
+  cost: low
+  source: "Wet soil and leaves raise radar backscatter (NASA Earthdata SAR introduction)"
+  check: "The same patch on the next Pass."

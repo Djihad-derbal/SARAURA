@@ -14,7 +14,7 @@
     "recipe": {"type": "string", "pattern": "^[a-z_]+$", "description": "Function name in pipeline/answers.py RECIPES"},
     "order": {"type": "integer", "minimum": 1},
     "evidence": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "context": {"type": "array", "items": {"enum": ["lines", "places", "roads"]}, "description": "OpenStreetMap features the recipe needs (pipeline/context.py)"},
+    "context": {"type": "array", "items": {"enum": ["lines", "places", "roads", "fields", "water"]}, "description": "OpenStreetMap features the recipe needs (pipeline/context.py)"},
     "thresholds": {"type": "object", "additionalProperties": {"type": "number"}},
     "classes": {
       "type": "array",

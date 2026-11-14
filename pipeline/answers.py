@@ -141,6 +141,34 @@ def points_of(geo: Geo, fc: dict, classes: tuple[str, ...]):
             yield f["properties"], lon, lat
 
 
+def project_geom(geo: Geo, geom: dict) -> dict:
+    """A GeoJSON Polygon or MultiPolygon in lon/lat, projected to the grid's CRS (for rasterio.features)."""
+    def ring(r):
+        x, y = geo.fwd.transform(*np.asarray(r, float).T)
+        return list(zip(np.atleast_1d(x).tolist(), np.atleast_1d(y).tolist()))
+    if geom["type"] == "Polygon":
+        return {"type": "Polygon", "coordinates": [ring(r) for r in geom["coordinates"]]}
+    return {"type": "MultiPolygon", "coordinates": [[ring(r) for r in poly] for poly in geom["coordinates"]]}
+
+
+def rasterize_ids(geo: Geo, geoms: list[dict], all_touched: bool = False) -> np.ndarray:
+    """Polygon i (0-based) painted as i + 1 on the grid; 0 elsewhere. Later polygons win where they overlap."""
+    from rasterio import features as rf
+    from rasterio.transform import from_origin
+
+    g = geo.g
+    H, W = g["shape"]
+    shapes = [(project_geom(geo, gm), i + 1) for i, gm in enumerate(geoms)]
+    if not shapes:
+        return np.zeros((H, W), np.int32)
+    return rf.rasterize(shapes, out_shape=(H, W), transform=from_origin(g["x0"], g["y0"], g["res"], g["res"]),
+                        fill=0, dtype="int32", all_touched=all_touched)
+
+
+def polygons_of(fc: dict) -> list[tuple[dict, dict]]:
+    return [(f["properties"], f["geometry"]) for f in fc["features"] if f["geometry"]["type"] in ("Polygon", "MultiPolygon")]
+
+
 def dilate(a: np.ndarray) -> np.ndarray:
     from scipy.ndimage import grey_dilation
 
@@ -321,6 +349,25 @@ def _towns(ctx: dict):
     return list(points_of(ctx["geo"], ctx["places"], ("city", "town", "village", "hamlet", "suburb")))
 
 
+class Near:
+    """'Texenna (1.2 km north)': the nearest named village or town to a spot, for naming patches and fields."""
+
+    def __init__(self, ctx: dict):
+        geo = ctx["geo"]
+        self.geo = geo
+        self.t = [(p["name"], *geo.fwd.transform(lon, lat)) for p, lon, lat in _towns(ctx) if p["name"]]
+        self.x = np.array([t[1] for t in self.t]) if self.t else np.zeros(0)
+        self.y = np.array([t[2] for t in self.t]) if self.t else np.zeros(0)
+
+    def __call__(self, lon: float, lat: float, short: bool = False) -> str:
+        if not self.t:
+            return ""
+        x, y = self.geo.fwd.transform(lon, lat)
+        d = np.hypot(self.x - x, self.y - y)
+        j = int(np.argmin(d))
+        return self.t[j][0] if short else f"{self.t[j][0]} ({d[j] / 1000:.1f} km {compass(x - self.x[j], y - self.y[j])})"
+
+
 def burned_slopes(ctx: dict, q: dict) -> dict:
     A, T, geo = ctx["A"], q["thresholds"], ctx["geo"]
     path, up, share = _paths(ctx, T)
@@ -495,7 +542,281 @@ def forest_recovery(ctx: dict, q: dict) -> dict:
                         f"and {s[3]:.0f}% shows no return yet, two months after the fire."}
 
 
-RECIPES = {f.__name__: f for f in (safe_to_build, what_to_build, better_plots, lines_at_risk, burned_slopes, roads_to_watch, replant_first, forest_recovery)}
+FIELD_KIND = {"farmland": "Field", "orchard": "Orchard", "meadow": "Meadow", "vineyard": "Vineyard", "greenhouse_horticulture": "Greenhouses"}
+
+
+def farms_burned(ctx: dict, q: dict) -> dict:
+    """A5: burn map x mapped fields. Each OpenStreetMap field gets the share of its 20 m pixels that burned."""
+    A, T, geo = ctx["A"], q["thresholds"], ctx["geo"]
+    fields = polygons_of(ctx["fields"])
+    geo20 = Geo(ctx["g20"])
+    burned = A["burned20"]
+    n = len(fields)
+    ids20 = rasterize_ids(geo20, [g for _, g in fields])
+    px = np.bincount(ids20.ravel(), minlength=n + 1)
+    bpx = np.bincount(ids20.ravel(), weights=burned.ravel().astype(np.float64), minlength=n + 1)
+    ha20 = ctx["g20"]["res"] ** 2 / 1e4
+    with np.errstate(invalid="ignore", divide="ignore"):
+        share = np.where(px > 0, bpx / np.maximum(px, 1), np.nan)
+    k = np.zeros(n + 1, np.uint8)  # class per field id: 1 mostly burned, 2 partly, 3 not burned, 0 too small to see
+    with np.errstate(invalid="ignore"):
+        k[1:][np.isfinite(share[1:])] = 3
+        k[1:][share[1:] >= T["partly"]] = 2
+        k[1:][share[1:] >= T["mostly"]] = 1
+    ids60 = rasterize_ids(geo, [g for _, g in fields], all_touched=True)  # small fields stay visible at 60 m
+    cls = k[ids60]
+    near = Near(ctx)
+    items = []
+    for i in np.flatnonzero(np.isin(k[1:], (1, 2))):
+        fid = int(i) + 1
+        rr, cc = np.nonzero(ids20 == fid)
+        lon, lat = geo20.lonlat(rr.mean(), cc.mean())
+        props = fields[i][0]
+        kind = FIELD_KIND.get(props["class"], "Field")
+        place = near(lon, lat)
+        items.append({"name": props["name"] or (f"{kind} near {place}" if place else kind), "kind": kind.lower(),
+                      "lon": round(float(lon), 5), "lat": round(float(lat), 5), "area_ha": round(float(px[fid] * ha20), 2),
+                      "burned_ha": round(float(bpx[fid] * ha20), 2), "burned_pct": round(float(share[fid]) * 100), "class": int(k[fid])})
+    items.sort(key=lambda it: (it["class"], -it["burned_ha"]))
+    mapped_ha = float(px[1:].sum() * ha20)
+    burned_ha = float(bpx[1:].sum() * ha20)
+    by_kind: dict = {}
+    for it in items:
+        by_kind[it["kind"]] = by_kind.get(it["kind"], 0) + it["burned_ha"]
+    n1 = sum(it["class"] == 1 for it in items)
+    top = max(by_kind, key=by_kind.get) if by_kind else None
+    if items:
+        head = (f"{n1} mapped fields lost most of their cover (half or more burned) and {len(items) - n1} more were partly burned: "
+                f"{burned_ha:,.0f} ha of the {mapped_ha:,.0f} ha of farmland mapped here burned"
+                + (f", most of it {top}s ({by_kind[top]:,.0f} ha)." if top else "."))
+    else:
+        head = f"The only mapped field ({mapped_ha:,.0f} ha) did not burn." if n == 1 else f"None of the {n} mapped fields ({mapped_ha:,.0f} ha) burned."
+    head += " Only fields drawn in OpenStreetMap are counted, so the real total is higher."
+    return {
+        "array": cls,
+        "items": items,
+        "headline": head,
+        "ranked": {"title": "Burned fields for the compensation list",
+                   "columns": [{"key": "name", "label": "Field"}, {"key": "kind", "label": "Type"}, {"key": "burned_ha", "label": "Burned", "unit": "ha"},
+                               {"key": "burned_pct", "label": "Of the field", "unit": "%"}],
+                   "rows": items},
+    }
+
+
+def mud_to_water(ctx: dict, q: dict) -> dict:
+    """A7: how much burned ground drains into each river, reservoir and river mouth, and where each spot's rain ends up."""
+    A, T, geo = ctx["A"], q["thresholds"], ctx["geo"]
+    d = A["drainage_ha"]
+    steep_up, burned_up, edge = A["mud_upstream_ha"], A["burned_upstream_ha"], A["edge_upstream"]
+    H, W = d.shape
+    with np.errstate(invalid="ignore", divide="ignore"):
+        steep_share = np.where(d > 0, steep_up / d, np.nan)
+
+    def klass(sh):
+        return 3 if sh >= T["high_share"] else 2 if sh >= T["low_share"] else 1
+
+    dd = np.nan_to_num(d)
+    river = dd >= T["river_ha"]
+    cls = np.zeros(d.shape, np.uint8)
+    with np.errstate(invalid="ignore"):
+        cls[river] = 1
+        cls[river & (steep_share >= T["low_share"])] = 2
+        cls[river & (steep_share >= T["high_share"])] = 3
+    near = Near(ctx)
+    rcv, order = ctx["flow"]
+    # named OpenStreetMap rivers as one point cloud, to name a mouth by the river running into it
+    rpts, rname = [], []
+    for p, xy in project_lines(geo, {"features": [f for f in ctx["water"]["features"] if f["properties"]["class"] == "river" and f["properties"]["name"]]}):
+        pts, _ = densify(xy, geo.g["res"])
+        rpts.append(pts)
+        rname += [p["name"]] * len(pts)
+    rpts = np.concatenate(rpts) if rpts else np.zeros((0, 2))
+    # the main donor of each cell (the one with the most water), to walk up a river from its mouth
+    donors = np.flatnonzero(rcv >= 0)
+    donors = donors[np.argsort(dd.ravel()[donors], kind="stable")]
+    main_up = np.full(H * W, -1, np.int64)
+    main_up[rcv[donors]] = donors  # ascending drainage: the largest donor is written last
+
+    def river_name(r, c, steps=150, max_m=250.0):
+        """Most common OSM river name within max_m of the main channel over its first ~9 km upstream."""
+        if not len(rpts):
+            return ""
+        votes: dict = {}
+        cell = r * W + c
+        for s in range(steps):
+            if cell < 0:
+                break
+            if s % 2 == 0:
+                lon, lat = geo.lonlat(*divmod(cell, W))
+                x, y = geo.fwd.transform(lon, lat)
+                dist = np.hypot(rpts[:, 0] - x, rpts[:, 1] - y)
+                j = int(np.argmin(dist))
+                if dist[j] <= max_m:
+                    votes[rname[j]] = votes.get(rname[j], 0) + 1
+            cell = int(main_up[cell])
+        best = max(votes, key=votes.get, default="")
+        return best if votes.get(best, 0) >= 3 else ""
+
+    def item(kind, name, r, c):
+        dh = float(d[r, c])
+        sh = float(steep_share[r, c])
+        lon, lat = geo.lonlat(r, c)
+        return {"name": name, "kind": kind, "lon": round(float(lon), 5), "lat": round(float(lat), 5), "r": int(r), "c": int(c),
+                "catchment_km2": round(dh / 100, 1), "burned_pct": round(float(burned_up[r, c]) / dh * 100, 1) if dh else 0.0,
+                "steep_ha": round(float(steep_up[r, c])), "steep_pct": round(sh * 100, 1), "partial": bool(edge[r, c] > 0), "class": klass(sh)}
+
+    items = []
+    # reservoirs: the cell inside each one with the most water draining through it is its outlet (the dam)
+    res = [(p, g) for p, g in polygons_of(ctx["water"]) if p["class"] == "reservoir"]
+    ids = rasterize_ids(geo, [g for _, g in res], all_touched=True).ravel()
+    w_, s_, e_, n_ = ctx["m"]["bbox"]
+
+    def beyond(g):  # a reservoir reaching past the map edge is fed from beyond it (Beni Haroun)
+        rings = g["coordinates"] if g["type"] == "Polygon" else [r for poly in g["coordinates"] for r in poly]
+        xy = np.concatenate([np.asarray(r, float) for r in rings])
+        return bool(((xy[:, 0] < w_) | (xy[:, 0] > e_) | (xy[:, 1] < s_) | (xy[:, 1] > n_)).any())
+
+    for i, (p, g) in enumerate(res):
+        cells = np.flatnonzero(ids == i + 1)
+        if not cells.size:
+            continue
+        j = int(cells[int(np.argmax(dd.ravel()[cells]))])
+        r, c = divmod(j, W)
+        if dd[r, c] < T["min_reservoir_ha"]:
+            continue
+        lon, lat = geo.lonlat(r, c)
+        items.append(item("reservoir", p["name"] or f"Reservoir near {near(lon, lat, short=True)}", r, c))
+        items[-1]["partial"] = items[-1]["partial"] or beyond(g)
+    # river mouths: land cells that drain straight into the sea (not off the edge of the map)
+    land = np.isfinite(d)
+    sea = ~land
+    seaside = np.zeros_like(land)
+    seaside[1:-1, 1:-1] = sea[:-2, 1:-1] | sea[2:, 1:-1] | sea[1:-1, :-2] | sea[1:-1, 2:]
+    mouth = (rcv.reshape(H, W) < 0) & land & seaside & (dd >= T["mouth_ha"])
+    cand = np.argwhere(mouth)
+    taken: list = []
+    sep = T["mouth_separation_m"] / geo.g["res"]
+    for j in np.argsort(-dd[mouth]):
+        r, c = cand[j]
+        if any(math.hypot(r - a, c - b) < sep for a, b in taken):
+            continue
+        taken.append((r, c))
+        lon, lat = geo.lonlat(r, c)
+        nm = river_name(int(r), int(c))
+        items.append(item("river mouth", f"{nm} (mouth)" if nm else f"River mouth near {near(lon, lat, short=True)}", r, c))
+    items.sort(key=lambda it: (-it["class"], -it["steep_ha"]))
+    items = items[:254]
+    # where each spot's water ends: the first reservoir or mouth downstream (1-based item index, 0 = none on the map)
+    target = np.zeros(H * W, np.int32)
+    for n_, it in enumerate(items, start=1):
+        target[it["r"] * W + it["c"]] = n_
+    tl, rl = target.tolist(), rcv.tolist()
+    for cidx in order.tolist():  # receivers before donors
+        if not tl[cidx]:
+            t = rl[cidx]
+            if t >= 0:
+                tl[cidx] = tl[t]
+    outlet = np.asarray(tl, np.int32).reshape(H, W)
+    export.write_cog(ctx["site_id"], f"a7_outlet_{ctx['date']}", np.where(outlet > 0, outlet, 255).astype(np.uint8), geo.g, categorical=True, sub="evidence")
+    for it in items:
+        it.pop("r"), it.pop("c")
+        it["partial"] = "yes" if it["partial"] else ""
+    high = [it for it in items if it["class"] == 3]
+    head = (f"{len(high)} of {len(items)} reservoirs and river mouths take water from catchments where {T['high_share'] * 100:.0f}% or more of the ground is burned and steep"
+            + (f", led by {high[0]['name']} ({high[0]['steep_pct']:.0f}%, {high[0]['steep_ha']:,} ha)." if high else "."))
+    worst_res = max((it for it in items if it["kind"] == "reservoir"), key=lambda it: it["steep_ha"], default=None)
+    if worst_res and worst_res["steep_ha"] > 0:
+        head += f" The reservoir receiving the most is {worst_res['name']} ({worst_res['steep_ha']:,} ha of burned steep ground upstream"
+        head += ", counting only the part of its catchment on the map)." if worst_res["partial"] else ")."
+    km = {k: round(float((cls == k).sum()) * geo.g["res"] / 1000) for k in (2, 3)}
+    head += f" About {km[3]:,} km of river carry a heavy share of burned steep ground and {km[2]:,} km a moderate one."
+    return {
+        "array": dilate(cls),
+        "items": items,
+        "headline": head,
+        "ranked": {"title": "Reservoirs and river mouths below the burned ground",
+                   "columns": [{"key": "name", "label": "Name"}, {"key": "kind", "label": "Type"}, {"key": "steep_pct", "label": "Catchment burned and steep", "unit": "%"},
+                               {"key": "steep_ha", "label": "Burned steep", "unit": "ha"}, {"key": "catchment_km2", "label": "Catchment on the map", "unit": "km²"}],
+                   "rows": items},
+    }
+
+
+def _day(s: str) -> str:
+    d = dt.date.fromisoformat(s)
+    return f"{d.day} {d.strftime('%b')}"
+
+
+def since_last_pass(ctx: dict, q: dict) -> dict:
+    """A9: what changed between the last two Passes, on 60 m blocks, and which changed patches lie near people."""
+    from scipy.ndimage import binary_dilation, label
+
+    A, T, geo = ctx["A"], q["thresholds"], ctx["geo"]
+    dhv, dhh = A["dhv60"], A["dhh60"]
+    prev, last = ctx.get("prev_date"), ctx["date"]
+    cls = np.zeros(dhv.shape, np.uint8)
+    if prev is None or not np.isfinite(dhv).any():
+        return {"array": cls, "headline": "Only one Pass so far: nothing to compare yet."}
+    t = T["change_db"]
+    with np.errstate(invalid="ignore"):
+        cls[dhv >= t] = 4
+        cls[(dhh >= t) & (cls == 0)] = 3
+        cls[(dhh <= -t) & (cls == 0)] = 2
+        cls[dhv <= -t] = 1
+    lab, n = label(cls > 0, structure=np.ones((3, 3)))
+    if n:  # a lone 60 m block is most likely speckle
+        sizes = np.bincount(lab.ravel())
+        cls[(sizes[lab] < T["min_cells"]) & (lab > 0)] = 0
+    # near people: within village_radius_m of a village, or on a road
+    people = np.zeros(cls.shape, bool)
+    for props, lon, lat in _towns(ctx):
+        r, c = geo.rc_lonlat(lon, lat)
+        if geo.inside(r, c):
+            people[r, c] = True
+    people = binary_dilation(people, structure=disc(max(1, int(round(T["village_radius_m"] / geo.g["res"])))))
+    for props, pts, dist, r, c in _paint_roads(ctx, geo.g["res"] / 2):
+        inb = geo.inside(r, c)
+        people[r[inb], c[inb]] = True
+    burned = np.nan_to_num(A["burned_share"]) >= 0.5
+    steep = np.nan_to_num(A["steep_burned_share"]) >= 0.25
+    near = Near(ctx)
+    cell_ha = geo.g["res"] ** 2 / 1e4
+    kinds = {1: "vegetation signal fell", 2: "surface darker", 3: "surface brighter", 4: "vegetation signal rose"}
+    items = []
+    for kk in (1, 2, 3):
+        lab, n = label(cls == kk, structure=np.ones((3, 3)))
+        if not n:
+            continue
+        sizes = np.bincount(lab.ravel())
+        for idx in np.flatnonzero(sizes[1:] >= T["min_cells"]) + 1:
+            m = lab == idx
+            rr, cc = np.nonzero(m)
+            lon, lat = geo.lonlat(rr.mean(), cc.mean())
+            items.append({"name": near(lon, lat) or "Changed patch", "kind": kinds[kk], "lon": round(float(lon), 5), "lat": round(float(lat), 5),
+                          "area_ha": round(float(sizes[idx] * cell_ha), 1), "near_people": "yes" if people[m].any() else "",
+                          "burned": "yes" if burned[m].mean() >= 0.5 else "", "steep_burned": "yes" if steep[m].mean() >= 0.5 else "",
+                          "dhv_db": round(float(np.nanmedian(dhv[m])), 1), "dhh_db": round(float(np.nanmedian(dhh[m])), 1), "class": kk})
+    items.sort(key=lambda it: (it["class"], it["near_people"] != "yes", -it["area_ha"]))
+    ha = {k: round(float((cls == k).sum() * cell_ha)) for k in (1, 2, 3, 4)}
+    nearp = {k: sum(it["near_people"] == "yes" and it["class"] == k for it in items) for k in (1, 2)}
+    items = items[:80]
+    head = (f"Between the Passes of {_day(prev)} and {_day(last)}: {ha[1]:,} ha lost vegetation signal (a new burn, clearing or a slip) and "
+            f"{ha[2]:,} ha turned darker (standing water or smoothed ground); {nearp[1] + nearp[2]} of these patches lie within "
+            f"{T['village_radius_m']:.0f} m of a village or on a road. {ha[3]:,} ha turned brighter (mostly wetter soil after rain) and "
+            f"{ha[4]:,} ha of vegetation signal rose. Renewed with every 12-day Pass.")
+    return {
+        "array": cls,
+        "items": items,
+        "headline": head,
+        "ranked": {"title": f"Changed patches since {_day(prev)}, near people first",
+                   "columns": [{"key": "name", "label": "Near"}, {"key": "kind", "label": "Change"}, {"key": "area_ha", "label": "Area", "unit": "ha"},
+                               {"key": "near_people", "label": "Near a village or road"}],
+                   "rows": items},
+    }
+
+
+RECIPES = {f.__name__: f for f in (safe_to_build, what_to_build, better_plots, lines_at_risk, burned_slopes, roads_to_watch, replant_first, forest_recovery,
+                                   farms_burned, mud_to_water, since_last_pass)}
+
 
 
 # ---------------------------------------------------------------- build
@@ -525,10 +846,13 @@ def build(site_id: str, log=print) -> int:
         ev = evidence.wildfire(site_id, m, site, log)
         ctx["A"] = ev["arrays"]
         ctx["flow"] = ev["flow"]
+        ctx["g20"] = ev["grid20"]
+        ctx["prev_date"] = ev["prev_date"]
     else:
         raise RuntimeError(f"No evidence step for the {m['lens']} Lens yet")
     ctx["geo"] = Geo(ev["grid"])
     date = ev["date"]
+    ctx["date"] = date
     for kind in sorted({k for q in qs for k in q.get("context", [])} | {"places"}):
         ctx[kind] = context.load(site_id, m["bbox"], kind, log=log)
 
@@ -684,7 +1008,10 @@ def at_point(site_id: str, lon: float, lat: float) -> dict:
         L, Ev = f"{site_id}/layers/", f"{site_id}/evidence/"
         vals = {"up": _value_at(site_id, f"{L}mud_upstream_ha_{d}.tif", lon, lat), "rec": _value_at(site_id, f"{L}hv_recovery_{d}.tif", lon, lat),
                 "drain": _value_at(site_id, f"{Ev}drainage_ha_{d}.tif", lon, lat), "burned": _value_at(site_id, f"{Ev}burned_share_{d}.tif", lon, lat),
-                "steep": _value_at(site_id, f"{Ev}steep_burned_share_{d}.tif", lon, lat)}
+                "steep": _value_at(site_id, f"{Ev}steep_burned_share_{d}.tif", lon, lat),
+                "burned_up": _value_at(site_id, f"{Ev}burned_upstream_ha_{d}.tif", lon, lat), "edge": _value_at(site_id, f"{Ev}edge_upstream_{d}.tif", lon, lat),
+                "dhv": _value_at(site_id, f"{Ev}dhv60_{d}.tif", lon, lat), "dhh": _value_at(site_id, f"{Ev}dhh60_{d}.tif", lon, lat),
+                "outlet": _value_at(site_id, f"{Ev}a7_outlet_{d}.tif", lon, lat)}
     for q in doc["questions"]:
         qf = qfiles[q["id"]]
         card = {"question": q["id"], "title": q["title"], "class": None, "label": None, "verdict": None, "color": None, "reasons": [], "solutions": []}
@@ -710,7 +1037,7 @@ def at_point(site_id: str, lon: float, lat: float) -> dict:
             else:
                 card["reasons"] = ["No mapped Metro, rail or canal line within 200 m of this spot."]
                 card.update({"class": None, "label": "No line here", "verdict": None, "color": None, "solutions": []})
-        elif recipe in ("burned_slopes", "replant_first", "forest_recovery", "roads_to_watch"):
+        elif recipe in ("burned_slopes", "replant_first", "forest_recovery", "roads_to_watch", "farms_burned", "mud_to_water", "since_last_pass"):
             extra = _explain_wildfire(site_id, recipe, vals, qf, lon, lat, card)  # may replace card["reasons"]
             card["reasons"] = card["reasons"] + extra
         if not card["label"]:
@@ -800,6 +1127,39 @@ def _explain_wildfire(site_id: str, recipe: str, v: dict, q: dict, lon: float, l
             out.append(f"{max(v['rec'], 0) * 100:.0f}% of the vegetation signal (HV) lost in the fire has returned since its post-fire low.")
         else:
             out.append("Not a burned forest block with a clear drop in the fire.")
+    elif recipe == "farms_burned":
+        it, dist = _nearest_item(site_id, q["id"], lon, lat, 400)
+        if card["class"] in (1, 2) and it:
+            out.append(f"{it['name']}: {it['burned_ha']:.1f} of its {it['area_ha']:.1f} ha burned ({it['burned_pct']}%).")
+        elif card["class"] == 3:
+            out.append("A mapped field with little or no burning.")
+        else:
+            out.append("No field is mapped here in OpenStreetMap" + (f"; the nearest burned one is {it['name']}, {dist:.0f} m away." if it else "."))
+    elif recipe == "mud_to_water":
+        if np.isfinite(v["drain"]) and v["drain"] >= T["river_ha"]:
+            out.append(f"This river drains {v['drain'] / 100:,.0f} km² on the map: {v['burned_up'] / v['drain'] * 100:.0f}% of it burned, "
+                       f"{v['up'] / v['drain'] * 100:.0f}% burned on steep slopes ({v['up']:,.0f} ha).")
+            if np.isfinite(v["edge"]) and v["edge"] > 0:
+                out.append("Part of its catchment lies beyond the edge of the map, so the whole catchment's burned share is lower than this.")
+        elif np.isfinite(v["drain"]):
+            amount = f"{v['drain']:,.0f} ha drain" if v["drain"] >= 10 else "only this slope drains"
+            out.append(f"Not a river here ({amount} through this spot); the burned slopes question covers small channels.")
+        else:
+            out.append("Sea, or outside the mapped land.")
+        key = f"{site_id}/answers/{q['id']}_items.json"
+        if np.isfinite(v.get("outlet", np.nan)) and config.data.exists(key):
+            items = json.loads(config.data.read_text(key))
+            n = int(v["outlet"])
+            if 1 <= n <= len(items):
+                it = items[n - 1]
+                out.append(f"Rain falling here ends up in {it['name']} ({it['kind']}), whose catchment is {it['steep_pct']:.0f}% burned steep ground"
+                           + (" in the part on the map." if it.get("partial") else "."))
+    elif recipe == "since_last_pass":
+        if np.isfinite(v["dhv"]):
+            out.append(f"Since the previous Pass the vegetation signal (HV) changed by {v['dhv']:+.1f} dB and the surface signal (HH) by {v['dhh']:+.1f} dB; "
+                       f"changes under {T['change_db']:.0f} dB are within the radar's usual Pass-to-Pass noise.")
+        else:
+            out.append("No usable signal here in one of the two Passes (open water, radar shadow, or outside the swath).")
     return out
 
 

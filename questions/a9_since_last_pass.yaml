@@ -1,0 +1,46 @@
+id: a9_since_last_pass
+title: "What changed since the last Pass?"
+short: "Where the radar signal changed between the last two 12-day Passes, with changed patches near villages and roads first."
+lens: wildfire
+recipe: since_last_pass
+order: 9
+evidence: [hv_db, hh_db, burned, osm_places, osm_roads]
+context: [places, roads]
+thresholds:
+  change_db: 3           # about four times the 60 m pass-to-pass noise (HV 0.7 dB, HH 0.9 dB standard deviation in Jijel)
+  min_cells: 2           # changed patches of at least two 60 m blocks (0.7 ha); a lone block is likely speckle
+  village_radius_m: 250
+classes:
+  - value: 1
+    label: "Vegetation signal fell (3 dB or more)"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "Volume scattering from leaves and branches dropped sharply since the last Pass: a new burn, clearing, a slope that slipped, or flooding."
+    solutions: [field_check_change, notify_after_pass]
+  - value: 2
+    label: "Surface darker (HH fell 3 dB or more)"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "The ground reflects less back to the radar while the vegetation held: standing water, a flooded field, or ground smoothed by mud."
+    solutions: [field_check_change, notify_after_pass, confirm_next_pass]
+  - value: 3
+    label: "Surface brighter (HH rose 3 dB or more)"
+    color: "#ffffbf"
+    verdict: caution
+    meaning: "The ground reflects more: most often wetter soil after rain, especially on bare burned slopes; sometimes fresh rough debris or ploughing."
+    solutions: [confirm_next_pass, field_check_change]
+  - value: 4
+    label: "Vegetation signal rose (3 dB or more)"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "Volume scattering rose: regrowth, or rain on leaves and soil at the time of the Pass. Usually nothing to act on."
+    solutions: [confirm_next_pass]
+sources:
+  - "NISAR GCOV backscatter, HV and HH, compared Pass to Pass on 60 m blocks"
+  - "Changes in L-band HV follow woody and leafy volume; HH also responds to soil moisture and roughness (NASA Earthdata SAR introduction)"
+limits:
+  - "Two Passes only: rain at the time of one Pass can raise the signal everywhere. A change that is still there 12 days later is real."
+  - "Bare ground in radar shadow and open water sit near the noise floor and are left blank."
+  - "The radar says what changed, not why: each patch needs a look on the ground or in the next optical image."
+features: points
+status: prototype

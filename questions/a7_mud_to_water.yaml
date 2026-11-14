@@ -1,0 +1,47 @@
+id: a7_mud_to_water
+title: "Is mud heading to the rivers and the dams?"
+short: "How much of each river's, reservoir's and river mouth's catchment burned on steep ground, and where each spot's rain ends up."
+lens: wildfire
+recipe: mud_to_water
+order: 7
+evidence: [burned, slope, dem_flow, osm_water, osm_places]
+context: [water, places]
+thresholds:
+  steep_deg: 23
+  flow_cell_m: 60
+  river_ha: 800          # rivers start where the small debris-flow basins of the burned slopes question end
+  low_share: 0.03        # 3% or more of the catchment is burned steep ground: a noticeable sediment load
+  high_share: 0.1        # 10% or more: a heavy load in the first storms
+  min_reservoir_ha: 50
+  mouth_ha: 1000         # river mouths draining at least 10 km2
+  mouth_separation_m: 1500
+classes:
+  - value: 1
+    label: "Little burned ground upstream (under 3%)"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "Under 3% of this river's catchment is burned steep ground: the fire adds little sediment here."
+    solutions: [river_normal_watch]
+  - value: 2
+    label: "Some burned ground upstream (3 to 10%)"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "3 to 10% of the catchment is burned steep ground: expect muddier water after storms."
+    solutions: [reservoir_turbidity_watch, sediment_traps, riverbank_buffer]
+  - value: 3
+    label: "Heavy burned ground upstream (10% or more)"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "10% or more of the catchment is burned steep ground: the first winter storms are likely to bring ash and sediment down this river."
+    solutions: [reservoir_turbidity_watch, sediment_traps, mulch_steep_slopes, riverbank_buffer]
+sources:
+  - "Shakesby, R.A. (2011). Post-wildfire soil erosion in the Mediterranean: review and future research directions. Earth-Science Reviews 105, 71-100"
+  - "Smith, H.G. et al. (2011). Wildfire effects on water quality in forest catchments: a review with implications for water supply. Journal of Hydrology 396, 170-192"
+  - "Barnes, R., Lehman, C. & Mulla, D. (2014). Priority-flood, on the Copernicus GLO-30 elevation model at 60 m"
+  - "Reservoirs and rivers from OpenStreetMap contributors, ODbL"
+limits:
+  - "Shares count only the part of each catchment inside the map. Where a river comes in from beyond the edge (Beni Haroun takes most of its water from far to the south), the share is marked partial and overstates the burned share of the whole catchment."
+  - "The 3% and 10% levels are team choices for ranking, not a calibrated sediment yield."
+  - "Sediment that settles in channels on the way down is not modelled; reservoirs far downstream receive less than the share suggests."
+features: points
+status: prototype

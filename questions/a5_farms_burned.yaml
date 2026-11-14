@@ -1,0 +1,40 @@
+id: a5_farms_burned
+title: "Which farms lost their cover?"
+short: "Each mapped field and orchard, with the share of it that burned: a ready list for compensation."
+lens: wildfire
+recipe: farms_burned
+order: 5
+evidence: [burned, hv_recovery, osm_fields, osm_places]
+context: [fields, places]
+thresholds:
+  mostly: 0.5            # half or more of the field's 20 m pixels burned
+  partly: 0.1
+classes:
+  - value: 1
+    label: "Mostly burned (half or more)"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "Half or more of this field or orchard burned: the crop or trees are likely lost for this season and the soil is bare before the rains."
+    solutions: [compensation_list, cover_burned_fields, orchard_tree_check]
+  - value: 2
+    label: "Partly burned (10 to 50%)"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "Part of this field or orchard burned, usually its edge next to the forest."
+    solutions: [compensation_list, orchard_tree_check, cover_burned_fields]
+  - value: 3
+    label: "Not burned (under 10%)"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "The radar burn map shows little or no burning in this field."
+    solutions: [firebreak_field_edge]
+sources:
+  - "Burn map: the wildfire Model (burned IoU 0.86 against Sentinel-2 dNBR) where it exists, else the Baseline"
+  - "Fields, orchards and meadows drawn by OpenStreetMap contributors (landuse=farmland, orchard, meadow, vineyard), ODbL"
+limits:
+  - "Only fields drawn in OpenStreetMap are counted. Many farms around Jijel are not mapped, so the true burned farmland is larger."
+  - "The burn map was made for forest and scrub; a harvested field that burned as stubble may be missed."
+  - "Fields smaller than one 20 m pixel are not measured."
+  - "Owners and crops are not known: the list gives places and hectares, and the agricultural services add the rest."
+features: points
+status: prototype

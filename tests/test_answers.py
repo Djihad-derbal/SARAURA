@@ -188,3 +188,50 @@ def test_sites_lead_with_their_questions():
         d = sites[sid]["decide"]
         assert d and d["questions"] and d["roles"] and d["cover_layer"].startswith("ans_")
     assert any(s["decide"] is None for s in sites.values())  # places without questions stay research-only
+
+
+# ---------------------------------------------------------------- Jijel, next questions (A5, A7, A9)
+
+
+def test_stitch_rings_joins_open_ways_into_a_closed_ring():
+    from pipeline.context import stitch_rings
+
+    a = [[0, 0], [1, 0], [1, 1]]
+    b = [[0, 1], [1, 1]]  # reversed piece
+    c = [[0, 1], [0, 0]]
+    rings = stitch_rings([a, b, c])
+    assert len(rings) == 1
+    assert rings[0][0] == rings[0][-1] and len(rings[0]) == 5
+
+
+def test_inflow_cells_flag_ground_sloping_in_from_the_edge():
+    # a plane falling from the left edge to the right edge: water enters on the left and leaves on the right
+    z = np.tile(np.arange(10, 0, -1, dtype=float), (5, 1))
+    inflow = evidence.inflow_cells(z, np.ones_like(z, bool))
+    assert inflow[2, 1] == 1
+    assert inflow[2, 8] == 0  # the low right edge is an outlet, not an inflow
+    assert inflow[2, 5] == 0  # not next to the border
+
+
+@pytest.mark.skipif("algeria_ne_wildfire" not in BUILT, reason="Algeria answers not built")
+def test_jijel_rivers_and_dams():
+    items = json.loads(config.data.read_text("algeria_ne_wildfire/answers/a7_mud_to_water_items.json"))
+    by = {i["name"]: i for i in items}
+    assert by["Beni Haroun Dam"]["partial"] == "yes"  # fed from far beyond the map
+    assert by["Barrage de Kissir"]["class"] == 1      # west of the fire
+    assert by["Barrage El Agrem"]["class"] == 3       # inside the burned hills
+    top = items[0]
+    card = next(c for c in answers.at_point("algeria_ne_wildfire", top["lon"], top["lat"])["cards"] if c["question"] == "a7_mud_to_water")
+    assert card["verdict"] == "bad" and any("ends up in" in r for r in card["reasons"])
+
+
+@pytest.mark.skipif("algeria_ne_wildfire" not in BUILT, reason="Algeria answers not built")
+def test_jijel_burned_fields_and_changes_are_listed():
+    doc = json.loads(config.data.read_text("algeria_ne_wildfire/answers/answers.json"))
+    qs = {q["id"]: q for q in doc["questions"]}
+    farms = json.loads(config.data.read_text("algeria_ne_wildfire/answers/a5_farms_burned_items.json"))
+    assert farms and all(f["class"] in (1, 2) and 0 < f["burned_ha"] <= f["area_ha"] + 0.1 for f in farms)
+    assert "OpenStreetMap" in qs["a5_farms_burned"]["headline"]
+    changes = json.loads(config.data.read_text("algeria_ne_wildfire/answers/a9_since_last_pass_items.json"))
+    assert changes and changes[0]["class"] == 1  # lost vegetation is listed first
+    assert "19 Oct" in qs["a9_since_last_pass"]["headline"]

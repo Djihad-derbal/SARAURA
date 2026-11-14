@@ -7,9 +7,10 @@ subsidence:
   - {id: civil_protection, label: "Civil protection", questions: [m1_safe_to_build, m4_lines_at_risk]}
   - {id: insurer, label: "Insurer or bank", questions: [m1_safe_to_build, m2_what_to_build]}
 wildfire:
-  - {id: civil_protection, label: "Civil protection", questions: [a1_burned_slopes, a2_roads_to_watch]}
-  - {id: forestry, label: "Forestry service", questions: [a3_replant_first, a4_forest_recovery, a1_burned_slopes]}
-  - {id: council, label: "Local council", questions: [a1_burned_slopes, a2_roads_to_watch, a3_replant_first]}
-  - {id: roads, label: "Public works (roads)", questions: [a2_roads_to_watch]}
-  - {id: farmer, label: "Farmer", questions: [a4_forest_recovery, a3_replant_first]}
-  - {id: park, label: "National park", questions: [a3_replant_first, a4_forest_recovery]}
+  - {id: civil_protection, label: "Civil protection", questions: [a1_burned_slopes, a2_roads_to_watch, a9_since_last_pass]}
+  - {id: forestry, label: "Forestry service", questions: [a3_replant_first, a4_forest_recovery, a1_burned_slopes, a9_since_last_pass]}
+  - {id: council, label: "Local council", questions: [a1_burned_slopes, a2_roads_to_watch, a5_farms_burned, a3_replant_first]}
+  - {id: roads, label: "Public works (roads)", questions: [a2_roads_to_watch, a9_since_last_pass]}
+  - {id: water, label: "Dam and water agency", questions: [a7_mud_to_water, a1_burned_slopes]}
+  - {id: farmer, label: "Farmer or agricultural services", questions: [a5_farms_burned, a4_forest_recovery, a3_replant_first]}
+  - {id: park, label: "National park", questions: [a3_replant_first, a4_forest_recovery, a9_since_last_pass]}

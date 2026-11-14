@@ -3,6 +3,8 @@
     lines   railway=subway|light_rail|tram, waterway=canal|drain   (Mexico City: Metro, light rail, Gran Canal)
     places  place=city|town|village|hamlet|suburb|neighbourhood|quarter (points)
     roads   highway=trunk..unclassified
+    fields  landuse=farmland|orchard|meadow|vineyard|greenhouse_horticulture (polygons; Jijel: burned farms, A5)
+    water   water=reservoir (polygons, multipolygon relations stitched) and waterway=river (lines; A7)
 
 Fetched once per site from the public Overpass API with a generic client name, and kept as GeoJSON under
 data/<site_id>/context/<kind>.geojson so rebuilds and the API never refetch. Only the site's bbox is sent.
@@ -23,7 +25,10 @@ QUERIES = {
     "lines": 'way["railway"~"^(subway|light_rail|tram)$"]({b});way["waterway"~"^(canal|drain)$"]({b});',
     "places": 'node["place"~"^(city|town|village|hamlet|suburb|neighbourhood|quarter)$"]({b});',
     "roads": 'way["highway"~"^(trunk|primary|secondary|tertiary|unclassified|trunk_link|primary_link)$"]({b});',
+    "fields": 'way["landuse"~"^(farmland|orchard|meadow|vineyard|greenhouse_horticulture)$"]({b});',
+    "water": 'way["water"="reservoir"]({b});relation["water"="reservoir"]({b});way["waterway"="river"]({b});',
 }
+AREA_KINDS = {"fields", "water"}  # closed ways become polygons
 
 
 def _key(site_id: str, kind: str) -> str:
@@ -45,6 +50,36 @@ def _overpass(body: str) -> dict:
     raise RuntimeError(f"Overpass failed ({last})")
 
 
+def stitch_rings(parts: list[list]) -> list[list]:
+    """Join open ways that share end points into closed rings (outer members of a multipolygon relation)."""
+    parts = [list(p) for p in parts if len(p) >= 2]
+    rings = []
+    while parts:
+        ring = parts.pop(0)
+        grown = True
+        while ring[0] != ring[-1] and grown:
+            grown = False
+            for i, p in enumerate(parts):
+                if p[0] == ring[-1]:
+                    ring += p[1:]
+                elif p[-1] == ring[-1]:
+                    ring += p[::-1][1:]
+                elif p[-1] == ring[0]:
+                    ring = p[:-1] + ring
+                elif p[0] == ring[0]:
+                    ring = p[::-1][:-1] + ring
+                else:
+                    continue
+                parts.pop(i)
+                grown = True
+                break
+        if len(ring) >= 4:
+            if ring[0] != ring[-1]:
+                ring.append(ring[0])  # cut by the query box: close it
+            rings.append(ring)
+    return rings
+
+
 def _to_geojson(kind: str, data: dict) -> dict:
     feats = []
     for el in data.get("elements", []):
@@ -54,13 +89,21 @@ def _to_geojson(kind: str, data: dict) -> dict:
             "name": tags.get("name:en") or tags.get("name:fr") or tags.get("name") or tags.get("ref") or "",
             "name_local": tags.get("name", ""),
             "ref": tags.get("ref", ""),
-            "class": tags.get("railway") or tags.get("waterway") or tags.get("place") or tags.get("highway") or "",
+            "class": tags.get("railway") or tags.get("waterway") or tags.get("place") or tags.get("highway") or tags.get("landuse") or tags.get("water") or "",
         }
         if el["type"] == "node":
             feats.append({"type": "Feature", "properties": props, "geometry": {"type": "Point", "coordinates": [el["lon"], el["lat"]]}})
+        elif el["type"] == "relation":
+            outers = [[[p["lon"], p["lat"]] for p in mb["geometry"]] for mb in el.get("members", [])
+                      if mb.get("role") == "outer" and mb.get("geometry")]
+            rings = stitch_rings(outers)
+            if rings:
+                feats.append({"type": "Feature", "properties": props, "geometry": {"type": "MultiPolygon", "coordinates": [[r] for r in rings]}})
         elif el.get("geometry"):
             coords = [[p["lon"], p["lat"]] for p in el["geometry"]]
-            if len(coords) >= 2:
+            if kind in AREA_KINDS and len(coords) >= 4 and coords[0] == coords[-1]:
+                feats.append({"type": "Feature", "properties": props, "geometry": {"type": "Polygon", "coordinates": [coords]}})
+            elif len(coords) >= 2:
                 feats.append({"type": "Feature", "properties": props, "geometry": {"type": "LineString", "coordinates": coords}})
     return {"type": "FeatureCollection", "features": feats, "attribution": "© OpenStreetMap contributors, ODbL"}
 
