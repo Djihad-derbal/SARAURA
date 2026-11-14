@@ -4,7 +4,8 @@ An open-source web app that turns NISAR radar data into maps, 3D views, time
 series and reports for surface change anywhere on Earth. Built for the NASA
 Space Apps Challenge 2026, "Dancing with the SARs".
 
-Start with [CONTEXT.md](CONTEXT.md). The build plan is [PLAN.md](PLAN.md), terms are in
+Start with [PRODUCT.md](PRODUCT.md): what the product is for, how it answers questions at each place, how each
+application scales, and how to set up on a new machine. Then [CONTEXT.md](CONTEXT.md) for the data facts. The build plan is [PLAN.md](PLAN.md), terms are in
 [GLOSSARY.md](GLOSSARY.md), decisions are in [docs/adr/](docs/adr/), and the AI pieces are in
 [ml/README.md](ml/README.md).
 

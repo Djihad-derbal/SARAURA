@@ -1,6 +1,6 @@
 # SARAURA: project context
 
-Read this first. It says what we are building, what is already decided, what already exists in the repo, and the facts about the data that constrain everything. Terms in **bold capitals** are defined in [GLOSSARY.md](GLOSSARY.md); the reasons behind big decisions are in [docs/adr/](docs/adr/). The build steps are in [PLAN.md](PLAN.md).
+Read this first. It says what we are building, what is already decided, what already exists in the repo, and the facts about the data that constrain everything. Terms in **bold capitals** are defined in [GLOSSARY.md](GLOSSARY.md); the reasons behind big decisions are in [docs/adr/](docs/adr/). The build steps are in [PLAN.md](PLAN.md). The product direction (questions at each place, how each application scales) and the setup for a new machine are in [PRODUCT.md](PRODUCT.md).
 
 Last updated: 2026-11-13.
 
