@@ -42,9 +42,14 @@ observations into actionable insights, for decision-makers as well as scientists
 
 ## 3. Link to Project Demo
 
-30-second video (1080p, English captions, no voice-over):
+30-second video (1080p, English captions, no voice-over).
 
-https://github.com/Djihad-derbal/SARAURA/blob/main/demo/saraura_demo_30s.mp4
+**Paste a YouTube link here.** GitHub can't play a 14 MB video in the browser; it only offers a download. Upload
+[`demo/saraura_demo_30s.mp4`](demo/saraura_demo_30s.mp4) to YouTube as Public or Unlisted (not Private), then paste
+its link in this field.
+
+If there is no time for YouTube, this direct link works without a login, but it downloads the file instead of playing
+it: https://raw.githubusercontent.com/Djihad-derbal/SARAURA/main/demo/saraura_demo_30s.mp4
 
 The video is a screen recording of the running app, made by [`demo/record.py`](demo/record.py) and
 [`demo/build.py`](demo/build.py). It shows the Jijel, Okavango and Mexico City question pages.
@@ -255,7 +260,7 @@ the Team Owner's local time). Work saved after it is not judged.
 - [ ] The video and project show no one under 18.
 - [ ] All team members are confirmed at the same Local Event.
 - [ ] Tick "Terms and Conditions" and "Confirm All Work is Original", then press **Submit for Judging**.
-- [ ] Optional: upload the video to YouTube as well, for a faster player than GitHub's.
+- [ ] The demo video is on YouTube (Public or Unlisted) and that link is in "Link to Project Demo".
 
 Judges score **Impact, Creativity, Validity, Relevance and Presentation**
 ([Judging and Awards Guide](https://www.spaceappschallenge.org/resources/judging-awards-guide/)).
