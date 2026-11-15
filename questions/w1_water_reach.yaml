@@ -1,0 +1,49 @@
+id: w1_water_reach
+title: "Where did the flood reach this season?"
+topic: "Where the water went"
+short: "How often each spot was under open water across the season's Passes, and which camps, airstrips and villages the water reached, and when."
+lens: wetland
+recipe: water_reach
+order: 1
+evidence: [pred_wetland, ow_share, osm_camps, osm_places]
+context: [places, camps]
+thresholds:
+  most_share: 0.5       # open water on half the Passes or more
+  always_share: 0.9     # open water on nearly every Pass: permanent channels and lagoons
+  radius_m: 500         # water counted around each camp, airstrip and village
+  min_share_pct: 10     # listed once 10% of that ground was open water on a Pass
+classes:
+  - value: 1
+    label: "No open water seen"
+    color: "#e7d7a8"
+    verdict: good
+    meaning: "No open water on any Pass this season. Water may still lie under reeds here: see the reeds question."
+    solutions: [build_above_flood_line, flood_watch_pass]
+  - value: 2
+    label: "Open water on some Passes"
+    color: "#7dd3fc"
+    verdict: caution
+    meaning: "The flood reached this spot for part of the season: seasonal floodplain."
+    solutions: [plan_access_by_flood, move_herds_early, flood_watch_pass]
+  - value: 3
+    label: "Open water most of the season"
+    color: "#2563eb"
+    verdict: bad
+    meaning: "Open water on half the Passes or more: the core of this year's flood."
+    solutions: [plan_access_by_flood, build_above_flood_line]
+  - value: 4
+    label: "Open water all season"
+    color: "#1e3a8a"
+    verdict: bad
+    meaning: "Open water on nearly every Pass: permanent channels, lagoons and pans."
+    solutions: [plan_access_by_flood]
+sources:
+  - "AI water Model on every NISAR Pass (read its card): LightGBM open water with a hidden-Markov smoothing through the season; open-water IoU 0.21 against 0.01 for the Otsu Baseline, on held-out 5 km blocks scored against Sentinel-2"
+  - "McCarthy, J. M. et al. (2003). Flooding patterns of the Okavango wetland in Botswana between 1972 and 2000. Ambio 32(7)"
+  - "Camps, lodges, airstrips and villages from OpenStreetMap contributors, ODbL"
+limits:
+  - "On the three dates with a clear Sentinel-2 image these maps show 8 to 17 times more open water than Sentinel-2 does (11.6% against 1.0% of the map on 6 Sep). Part of it is shallow water among grass that optical images miss, part is smooth dry ground that looks like water to radar: read 'open water' as 'water or very wet ground'."
+  - "One season of radar. The flooded area changes several-fold between dry and wet years, so a camp left dry this year can flood in a big year."
+  - "Wind-roughened water looks bright to the radar and can be missed."
+features: points
+status: prototype

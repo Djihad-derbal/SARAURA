@@ -64,7 +64,7 @@ Check: every Model card has a Baseline score, a Model score, the label source (p
 
 | Lens | Labels | Metric | Model | Baseline | Beats Baseline? |
 |---|---|---|---|---|---|
-| Wildfire | Sentinel-2 dNBR (proxy) | burned IoU | 0.86 Algeria / 0.36 Washington (not retrained) | 0.21 / 0.18 | Yes |
+| Wildfire | Sentinel-2 dNBR (proxy) | burned IoU | 0.92 Algeria (notebook U-Net, 15 Nov; was ChangeUTAE 0.86) / Washington: no Model map now | 0.33 / 0.18 | Yes |
 | Earthquake | Copernicus EMSR884 (real) | average precision | 0.50 (0.43–0.56) | 0.43 | Yes, modestly |
 | Farming | CDL 2024+2025 rotation rule (proxy) | macro F1 | 0.86 (0.85 before harvest) | 0.53 | Yes |
 | Wetland | Sentinel-2 MNDWI (proxy) | open-water IoU | 0.63 | 0.47 (Otsu on HH) | Yes |
@@ -87,6 +87,7 @@ Subsidence (`ml/subsidence.py`):
 - Writes a 12-day forecast `pred_subsidence_2026-10-25.tif`; the card says to use the Baseline. Contracts now allow a numeric `prediction` block on cards and forecast dates past the last Pass.
 
 Wetland (`ml/wetland.py`): open water only (optical labels cannot see water under reeds), labels from Sentinel-2 within 4 days of 3 Passes. Open-water IoU, 5 km blocks, balanced samples: **Model 0.63, Otsu on HH 0.47**; per date 0.54/0.42, 0.73/0.65, 0.51/0.25. Writes `pred_wetland_<date>` for all 10 Passes.
+- Replaced on 2026-11-15 by the notebook Model (`saraura-wetland-okavango-v3`, installed with `ml/check_export.py`): LightGBM open water + physics-guided flooded vegetation + HMM, 3 classes on all 11 Passes (26 Jun to 5 Nov). Open-water IoU on held-out 5 km blocks at true prevalence: **Model 0.21, Otsu on HH 0.01**. Its maps show 8 to 17 times more open water than Sentinel-2 on the three matched dates (read the W1 limits). Questions W1 to W5 read these maps (PRODUCT.md, section 4).
 
 Volcano (`ml/volcano.py`): labels are Sentinel-2 hot spots (NHI_SWIR > 0, bright B12, within 10 km of the vent, hot on 3+ scenes). Two label rules were rejected first: both indices fired on 71% of the window, and one-scene hot spots spread in all directions (cloud). The final 2,443 hot pixels lie 1–4 km N/NE of the vent, matching KVERT reports. Average precision, 1.5 km blocks: **Model 0.073, HH-change Baseline 0.003 = chance**. Map: 2.7 km² of new lava within 10 km of the vent.
 - `ml/predict.py --site <id>` writes `pred_wildfire_<last Pass>.tif`; `pipeline/predictions.py` lists any `pred_*` file plus its Model card in the manifest (also run by `run_site`), so the app never loads model code.

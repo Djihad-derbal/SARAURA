@@ -9,7 +9,7 @@ The other documents go deeper:
 - [docs/adr/](docs/adr/): the reasons behind big decisions.
 - [README.md](README.md): setup and commands.
 
-Last updated: 2026-11-14 (Space Apps 2026 runs 14–15 Nov 2026). The code described here is on the branch `phase-4b-questions-and-story`. It reaches `main` once PR #1 is merged.
+Last updated: 2026-11-15 (Space Apps 2026 runs 14–15 Nov 2026). The code described here is on the branch `phase-4b-questions-and-story`. It reaches `main` once PR #1 is merged.
 
 ---
 
@@ -50,6 +50,8 @@ The radar passes every 12 days, through cloud, smoke and darkness, so the answer
 | 11 | A big Earth hero, one application per scroll | A scroll story: a 3D NASA Earth ("Earth, through NISAR's eye") that flies to each place, with animated isometric scenes for Mexico City (sinking city) and Jijel (after the fire), and buttons straight into each place's questions | Shows what the radar solves before asking anyone to read a map |
 | 12 | A theme per chapter | City at dusk (Mexico City), embers (Jijel), misty pines (Washington). Colours, buttons and the Earth's glow fade between them | Each application feels like its own subject |
 | 13 | Scale the Algeria fire application | Built A5 (farms), A7 (rivers and dams) and A9 (since the last Pass): the questions the current data can answer. A6 needs a GUNW run, A8 spring Passes | Each new question reuses the evidence pass; two new recipes plus OSM fields and water |
+| 14 | Integrate the Okavango wetland Model (notebook export) | Built W1–W5 over the installed water maps: where the flood reached, safe ground, water under reeds, tracks that flood, change since the last Pass. Lone wet pixels are dropped first; the answers say they read an AI Model's maps | The third flagship place, and the first whose questions read a Model's maps on every Pass rather than one burn or damage map |
+| 15 | Install the Jijel notebook U-Net | Converted its burn mask into `pred_wildfire_2026-09-25.tif` plus a card (sites: Jijel only), checked and installed with `ml/check_export.py`, rebuilt A1–A9 | Burned IoU 0.92 against 0.33 for the HV-drop Baseline on the same test blocks. Washington loses its AI burn map (the new Model was never run there) and keeps the Baseline |
 
 ---
 
@@ -78,7 +80,7 @@ NISAR Passes ──► EVIDENCE (computed once per site) ──► QUESTIONS (ru
 **Roles** (`questions/roles.yaml`) choose which questions each kind of user sees first, and in what order.
 
 ### Why rules, not Models ([ADR-0008](docs/adr/0008-questions-as-rules-over-evidence.md))
-- **Rules travel; Models don't.** The wildfire Model scored IoU 0.86 in Algeria and 0.36 in Washington, but the burned-slope rules ran on Washington with no new code.
+- **Rules travel; Models don't.** The first wildfire Model scored IoU 0.86 in Algeria and 0.36 in Washington, but the burned-slope rules ran on Washington with no new code.
 - **Every answer is explainable.** "Red because uneven sinking reaches the 1/500 crack limit in 9 years" is easy to defend.
 - **Adding a question is cheap.** It is one YAML file if an existing recipe fits, or one YAML file plus one Python recipe if not. No training is needed.
 
@@ -127,7 +129,7 @@ Rebuild the answers after a site build with `python -m pipeline.answers <site>` 
   - insurer or bank.
 
 ### Jijel, Algeria: "After the fire, before the rains" (wildfire)
-- **Data:** 11 GCOV Passes from Jun to Oct 2026, over about 3,500 km² of the Petite Kabylie coast. The burn map comes from the Model (burned IoU 0.86) and the Baseline.
+- **Data:** 11 GCOV Passes from Jun to Oct 2026, over about 3,500 km² of the Petite Kabylie coast. The burn map comes from the notebook U-Net installed on 15 Nov (`jijel-wildfire-full-site`: burned IoU 0.92 on held-out test blocks, against 0.56 for gradient-boosted trees and 0.33 for the HV-drop Baseline, same blocks). It maps only land that was vegetated before the fire, so 42% of the site has no class and counts as not burned. It finds 61,718 ha burned; the previous ChangeUTAE map, kept in `data/algeria_ne_wildfire/previous_model/`, found 58,618 ha and agrees with it at IoU 0.85.
 - **Evidence:**
   - **Flow routing:** priority-flood routing (Barnes 2014) on the 60 m Copernicus elevation model.
   - **Mud sources:** burned steep ground (23° or more, Staley 2017) upstream of each channel.
@@ -136,12 +138,12 @@ Rebuild the answers after a site build with `python -m pipeline.answers <site>` 
 
 | Question | Rule | Result today |
 |---|---|---|
-| **A1 Which burned slopes could send mud onto villages?** | Villages within 250 m of a mud path | 12 villages beside a main mud path, 18 beside a smaller one; 30,843 ha of burned steep slopes are mud sources |
-| **A2 Which roads should be watched or closed in heavy rain?** | 500 m road sections crossing a mud path, ranked | 104 sections to close in heavy rain, 179 to watch |
-| **A3 Where should replanting start?** | Burned patches ranked by steepness, what lies downhill, and whether they are already recovering | 24,240 ha to replant first |
+| **A1 Which burned slopes could send mud onto villages?** | Villages within 250 m of a mud path | 14 villages beside a main mud path, 23 beside a smaller one; 32,104 ha of burned steep slopes are mud sources |
+| **A2 Which roads should be watched or closed in heavy rain?** | 500 m road sections crossing a mud path, ranked | 115 sections to close in heavy rain, 187 to watch |
+| **A3 Where should replanting start?** | Burned patches ranked by steepness, what lies downhill, and whether they are already recovering | 25,693 ha to replant first |
 | **A4 Is the forest coming back?** | Recovering: 30% or more of the lost HV has returned; slow: 10–30%; requires a drop of at least 1.5 dB | Median recovery 0.02: almost nothing has come back yet |
-| **A5 Which farms lost their cover?** | Each OpenStreetMap field, orchard and meadow gets the share of its 20 m pixels that burned: mostly (50% or more), partly (10–50%), not burned | 113 fields mostly burned and 6 partly: 119 ha of the 4,508 ha mapped, about half of it orchards. OSM maps only part of the farms |
-| **A7 Is mud heading to the rivers and the dams?** | Burned and burned-steep ground upstream of every river (800 ha or more), reservoir and river mouth; heavy at 10% or more of the catchment burned and steep, some at 3–10%. Catchments fed from beyond the map are marked partial. Tapping a spot says which dam or river mouth its rain ends in | 6 of 26 reservoirs and mouths heavy, led by the mouth near El Kennar (29%) and Barrage El Agrem (24%); Tabellout gets the most burned steep ground of any dam (1,621 ha, partial); Kissir and Boussiaba almost none; about 172 km of river heavy |
+| **A5 Which farms lost their cover?** | Each OpenStreetMap field, orchard and meadow gets the share of its mapped 20 m pixels that burned: mostly (50% or more), partly (10–50%), not burned; not mapped when the burn map covers under half of it | 118 fields mostly burned and 9 partly: 163 ha of the 4,508 ha mapped, 58 ha of it orchards. 157 fields (354 ha) lie mostly outside the burn map (harvested or bare before the fire) and are marked "not mapped", not "not burned". OSM maps only part of the farms |
+| **A7 Is mud heading to the rivers and the dams?** | Burned and burned-steep ground upstream of every river (800 ha or more), reservoir and river mouth; heavy at 10% or more of the catchment burned and steep, some at 3–10%. Catchments fed from beyond the map are marked partial. Tapping a spot says which dam or river mouth its rain ends in | 7 of 26 reservoirs and mouths heavy, led by the mouth near El Kennar (31%); Tabellout gets the most burned steep ground of any dam (1,790 ha, partial); about 189 km of river heavy |
 | **A9 What changed since the last Pass?** | HV and HH change between the last two Passes on 60 m blocks; 3 dB is about four times the Pass-to-Pass noise (0.7 dB HV). Classes: vegetation fell, surface darker, surface brighter, vegetation rose; lone blocks dropped | 19 Oct to 31 Oct: 58 ha lost vegetation signal and 87 ha turned darker, 29 of those patches near villages or roads; 1,921 ha brighter, mostly wet soil after rain |
 
 - **Roles:**
@@ -155,6 +157,22 @@ Rebuild the answers after a site build with `python -m pipeline.answers <site>` 
 
 ### Washington (Sinlahekin Fire): the same questions on another fire
 The A1–A5, A7 and A9 question files ran with **no new code**: A7 ranks Conners Lake first among the reservoirs (1,184 ha of burned steep ground upstream) and A9 finds 169 ha of lost vegetation signal between 5 and 17 Oct. It found no mapped village within 250 m of a mud path, and 3,151 ha of burned steep slopes as mud sources. This is the proof that the questions travel.
+
+### Okavango Delta: "Where does the flood go, and where is it safe?" (wetland)
+- **Data:** 11 GCOV Passes from 26 Jun to 5 Nov 2026 on track 172, over about 10,500 km² of the central delta. The water maps come from the AI Model trained in the notebook `saraura-wetland-okavango-v3` (LightGBM open water, physics-guided flooded vegetation, HMM through the season): open-water IoU 0.21 against 0.01 for the Otsu Baseline, held-out 5 km blocks at true prevalence. The flooded-vegetation class is supported by physics only (no labels exist under canopy).
+- **Evidence** (`evidence.wetland`, on the maps' 40 m grid): each Pass's class map with lone wet pixels dropped (fewer than 5 of the 3×3 block wet; about 30% of wet pixels are such speckle); share of Passes with open water and with water under vegetation; days under water; distance to this season's water.
+- **Context:** OpenStreetMap camps, lodges and airstrips (87) and tracks (2,738), new kinds `camps` and `tracks` in `pipeline/context.py`. Place search and the spot heading include camps.
+
+| Question | Rule | Result today |
+|---|---|---|
+| **W1 Where did the flood reach this season?** | Open water on no Pass / some / half or more / 90% or more; camps, airstrips and villages ranked by open water within 500 m | 196 km² on 26 Jun, peak 1,098 km² on 13 Aug, 480 km² on 5 Nov; 48 camps, airstrips and villages reached, led by Little Vumbura, Guma Lagoon and Kadizora |
+| **W2 Where is it safe to graze, farm or build a track?** | Dry all season and over 200 m from water; dry but within 200 m; under water 36 days or less (graze, flood-recession farming); longer | 37% dry and away from water, 43% beside it, 4% short flood, 16% long flood |
+| **W3 Where is water hiding under reeds and papyrus?** | Water under vegetation on some Passes / half or more | Peak 576 km² on 6 Sep, 39% of all water mapped that day; 435 km² on most Passes |
+| **W4 Which tracks and roads go under water, and when?** | 500 m sections; under water on a Pass when a fifth of the section is; listed from 2 Passes; red at half the Passes | 414 km under water on most Passes, 174 km on some; 392 km still under water on 5 Nov |
+| **W5 Where did the water arrive or leave since the last Pass?** | Last two Passes; changed patches of at least 5 of 9 pixels | 24 Oct to 5 Nov: 29 km² drained, 9 km² newly flooded: receding |
+
+- **Caveat to say out loud:** on the three dates with Sentinel-2, the maps show 8 to 17 times more open water than optical does. Part is shallow water among grass that optical misses, part is smooth dry ground. W1 says so in its limits, and the page footer says the answers read an AI Model's maps (`model_evidence` in `answers.json`, also used for Jijel's and Venezuela's Model maps).
+- **Roles:** safari camp or lodge operator; herder or farmer; district council and roads; water authority and wetland managers; wildlife and parks; land board and planning.
 
 ---
 
@@ -240,10 +258,10 @@ The USGS publishes post-fire debris-flow hazard maps for western US fires. Compa
 |---|---|---|---|
 | **Venezuela (earthquake)** | Which neighbourhoods to inspect first? Where not to rebuild? Is the ground still moving? Which roads and lifelines crossed moving ground? | Inspection order, relocation or special design, lifeline checks | Richest site: displacement, coherence loss, phase gradient, damage Model with real labels (EMSR884) |
 | **Kamchatka (volcano)** | Where is new lava going? Is the volcano swelling? Which valleys would carry mudflows (lahars)? | Close trails, raise the alert level, keep camps out of valleys | Ground motion, coherence; the lava Model is weak (AP 0.07), so lean on physics; ionosphere noise is worse up north |
-| **Okavango (wetland)** | Where will water reach this season? Where is it safe to graze, farm or build a road? Where is water hiding under reeds? | Move camps and herds early; dry-land ranking | Water Model, coherence; only one season so far |
+| **Okavango (wetland)** ✅ built as W1–W5 (section 4) | Next: which airstrips close, and when; does a camp's access hold in a big flood year (needs a second season) | Move camps and herds early; dry-land ranking | Water Model maps; only one season so far |
 | **US Midwest (farming)** | What is in each field before harvest? When was each harvested? Which fields stayed waterlogged? | Harvest estimates, insurance checks, drainage priorities | Crop Model (F1 0.86 before harvest), HV series |
 
-**The cheapest live demo of scaling:** add questions for one more site with YAML files only, reusing existing recipes where possible. Washington already proves this for fires. Okavango or Venezuela would need one or two new recipes in `pipeline/answers.py`.
+**The cheapest live demo of scaling:** add questions for one more site with YAML files only, reusing existing recipes where possible. Washington already proves this for fires. Venezuela and Okavango each needed new recipes in `pipeline/answers.py`; a second wetland would now need YAML only.
 
 ### 6.6 What gets in the way at scale
 - **Some thresholds depend on the place.** The 1/500 crack limit holds broadly, but a dangerous flood depends on local building types.

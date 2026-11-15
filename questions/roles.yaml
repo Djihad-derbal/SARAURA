@@ -21,3 +21,10 @@ earthquake:
   - {id: infrastructure, label: "Roads, Metro and water utilities", questions: [e4_lifelines_crossed, e3_still_moving]}
   - {id: family, label: "Family or home owner", questions: [e2_rebuild_where, e3_still_moving, e1_inspect_first]}
   - {id: insurer, label: "Insurer or aid agency", questions: [e1_inspect_first, e2_rebuild_where]}
+wetland:
+  - {id: camp, label: "Safari camp or lodge operator", questions: [w1_water_reach, w4_tracks_flooded, w5_since_last_pass]}
+  - {id: herder, label: "Herder or farmer", questions: [w2_dry_ground, w1_water_reach, w5_since_last_pass]}
+  - {id: roads, label: "District council and roads", questions: [w4_tracks_flooded, w2_dry_ground, w5_since_last_pass]}
+  - {id: water, label: "Water authority and wetland managers", questions: [w1_water_reach, w3_hidden_water, w5_since_last_pass]}
+  - {id: wildlife, label: "Wildlife and parks", questions: [w3_hidden_water, w1_water_reach, w4_tracks_flooded]}
+  - {id: planning, label: "Land board and planning", questions: [w2_dry_ground, w1_water_reach]}

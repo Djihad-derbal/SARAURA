@@ -609,7 +609,9 @@ export default function AskPanel({ doc, spot, spotBusy, spotErr, role, onRole, o
           );
         })}
       </ul>
-      <p className="mt-3 text-[11px] leading-relaxed text-ink-3">Worked out from the radar measurements with stated rules, not AI. Use it to decide where to look first and what to check, not as an engineering report. {doc.attribution}</p>
+      <p className="mt-3 text-[11px] leading-relaxed text-ink-3">{doc.model_evidence
+          ? `Worked out with stated rules over ${doc.model_evidence} (its card, in the research view, gives its score against a simple Baseline). `
+          : "Worked out from the radar measurements with stated rules, not AI. "}Use it to decide where to look first and what to check, not as an engineering report. {doc.attribution}</p>
     </div>
   );
 }

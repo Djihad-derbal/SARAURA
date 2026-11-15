@@ -228,7 +228,8 @@ export default function Report({ id }: { id: string }) {
         <section className="page-part">
           <h2 className="report-h2">Questions answered</h2>
           <p className="report-p">
-            The same radar evidence answers different questions for different people. Each answer below is a rule on the measured layers with stated thresholds (not AI), then the options that fit it,
+            The same radar evidence answers different questions for different people. Each answer below is a rule with stated thresholds on the measured layers
+            {answers.model_evidence ? ` and ${answers.model_evidence} (scored against a simple Baseline in the Models section)` : " (not AI)"}, then the options that fit it,
             each with its source and what to check on the ground. It is a screening to decide where to look first, not an engineering report.
           </p>
           <p className="mt-1 text-[10.5px] text-neutral-500">

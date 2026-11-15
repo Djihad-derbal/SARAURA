@@ -187,6 +187,8 @@ export type Answers = {
   questions: Question[];
   solutions: Record<string, Solution>;
   evidence: Record<string, unknown>;
+  /** The AI Model map the rules read on this site ("the AI water Model's maps of every Pass"), or null for rules on radar alone. */
+  model_evidence?: string | null;
   attribution: string;
 };
 export type Alternative = { lon: number; lat: number; distance_m: number; direction: string; sinking_cm_yr: number; years_500: number; label: string };

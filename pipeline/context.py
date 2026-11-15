@@ -5,6 +5,9 @@
     roads   highway=trunk..unclassified
     fields  landuse=farmland|orchard|meadow|vineyard|greenhouse_horticulture (polygons; Jijel: burned farms, A5)
     water   water=reservoir (polygons, multipolygon relations stitched) and waterway=river (lines; A7)
+    camps   tourism=camp_site|lodge|hotel|guest_house|chalet and aeroway=aerodrome|airstrip (points at their centre;
+            Okavango: safari camps and the airstrips that serve them)
+    tracks  highway=track plus the roads above (lines; Okavango: game-drive and village tracks that flood)
 
 Fetched once per site from the public Overpass API with a generic client name, and kept as GeoJSON under
 data/<site_id>/context/<kind>.geojson so rebuilds and the API never refetch. Only the site's bbox is sent.
@@ -27,8 +30,11 @@ QUERIES = {
     "roads": 'way["highway"~"^(trunk|primary|secondary|tertiary|unclassified|trunk_link|primary_link)$"]({b});',
     "fields": 'way["landuse"~"^(farmland|orchard|meadow|vineyard|greenhouse_horticulture)$"]({b});',
     "water": 'way["water"="reservoir"]({b});relation["water"="reservoir"]({b});way["waterway"="river"]({b});',
+    "camps": 'nwr["tourism"~"^(camp_site|lodge|hotel|guest_house|chalet)$"]({b});nwr["aeroway"~"^(aerodrome|airstrip)$"]({b});',
+    "tracks": 'way["highway"~"^(track|trunk|primary|secondary|tertiary|unclassified|trunk_link|primary_link)$"]({b});',
 }
 AREA_KINDS = {"fields", "water"}  # closed ways become polygons
+CENTRE_KINDS = {"camps"}  # every element becomes one point at its centre
 
 
 def _key(site_id: str, kind: str) -> str:
@@ -89,9 +95,14 @@ def _to_geojson(kind: str, data: dict) -> dict:
             "name": tags.get("name:en") or tags.get("name:fr") or tags.get("name") or tags.get("ref") or "",
             "name_local": tags.get("name", ""),
             "ref": tags.get("ref", ""),
-            "class": tags.get("railway") or tags.get("waterway") or tags.get("place") or tags.get("highway") or tags.get("landuse") or tags.get("water") or "",
+            "class": tags.get("railway") or tags.get("waterway") or tags.get("place") or tags.get("highway") or tags.get("landuse") or tags.get("water")
+                     or tags.get("tourism") or tags.get("aeroway") or "",
         }
-        if el["type"] == "node":
+        if kind in CENTRE_KINDS:
+            c = el.get("center") or ({"lon": el["lon"], "lat": el["lat"]} if "lon" in el else None)
+            if c:
+                feats.append({"type": "Feature", "properties": props, "geometry": {"type": "Point", "coordinates": [c["lon"], c["lat"]]}})
+        elif el["type"] == "node":
             feats.append({"type": "Feature", "properties": props, "geometry": {"type": "Point", "coordinates": [el["lon"], el["lat"]]}})
         elif el["type"] == "relation":
             outers = [[[p["lon"], p["lat"]] for p in mb["geometry"]] for mb in el.get("members", [])
@@ -115,7 +126,8 @@ def load(site_id: str, bbox, kind: str, refresh: bool = False, log=print) -> dic
         return json.loads(config.data.read_text(key))
     w, s, e, n = bbox
     b = f"{s},{w},{n},{e}"
-    body = f"[out:json][timeout:150];({QUERIES[kind].format(b=b)});out geom;"
+    out = "out center tags;" if kind in CENTRE_KINDS else "out geom;"
+    body = f"[out:json][timeout:150];({QUERIES[kind].format(b=b)});{out}"
     t0 = time.time()
     fc = _to_geojson(kind, _overpass(body))
     config.data.write_text(key, json.dumps(fc))

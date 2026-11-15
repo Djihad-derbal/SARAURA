@@ -1,0 +1,36 @@
+id: w4_tracks_flooded
+title: "Which tracks and roads go under water, and when?"
+topic: "Tracks that flood"
+short: "Track and road sections that went under water this season, with when the water arrived and whether it is still there, ranked."
+lens: wetland
+recipe: tracks_flooded
+order: 4
+evidence: [pred_wetland, osm_tracks]
+context: [tracks, places, camps]
+thresholds:
+  segment_m: 500        # tracks cut into 500 m sections
+  wet_share: 0.2        # a section is under water on a Pass once a fifth of it is (100 m of 500 m)
+  min_passes: 2         # under water on at least two Passes; a single Pass may be noise
+  most_share: 0.5       # under water on half the Passes or more
+classes:
+  - value: 1
+    label: "Floods on some Passes"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "The section went under water, open or under vegetation, on two Passes or more but less than half of them."
+    solutions: [close_track_flood_season, flood_watch_pass]
+  - value: 2
+    label: "Under water most of the season"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "The section was under water on half the Passes or more."
+    solutions: [raise_or_reroute_track, close_track_flood_season]
+sources:
+  - "Tracks and roads from OpenStreetMap contributors (highway=track to tertiary), ODbL"
+  - "AI water Model's maps on every Pass, open water and flooded vegetation together"
+limits:
+  - "OpenStreetMap does not map every game-drive track, and a mapped track may have moved."
+  - "Causeways, log bridges and raised sections narrower than the 40 m pixels are not seen: a track may stay passable where the map shows water."
+  - "Unnamed tracks are named after the nearest camp, airstrip or village."
+features: lines
+status: prototype

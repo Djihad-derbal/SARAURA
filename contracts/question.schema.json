@@ -60,7 +60,9 @@
           "places",
           "roads",
           "fields",
-          "water"
+          "water",
+          "camps",
+          "tracks"
         ]
       },
       "description": "OpenStreetMap features the recipe needs (pipeline/context.py)"

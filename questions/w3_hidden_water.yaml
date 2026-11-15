@@ -1,0 +1,30 @@
+id: w3_hidden_water
+title: "Where is water hiding under reeds and papyrus?"
+topic: "Water under reeds"
+short: "Water under standing vegetation that optical satellites cannot see, which the radar picks up through double bounce."
+lens: wetland
+recipe: hidden_water
+order: 3
+evidence: [pred_wetland, fv_share]
+thresholds:
+  most_share: 0.5       # under vegetation on half the Passes or more
+classes:
+  - value: 1
+    label: "Water under reeds on some Passes"
+    color: "#67e8f9"
+    verdict: caution
+    meaning: "Water under reeds, papyrus or grass for part of the season: the water surface and the stems bounce the radar straight back."
+    solutions: [ground_truth_reeds, wildlife_water_refuge]
+  - value: 2
+    label: "Water under reeds most of the season"
+    color: "#0e7490"
+    verdict: caution
+    meaning: "Water under vegetation on half the Passes or more: permanent swamp or long-flooded reed beds."
+    solutions: [wildlife_water_refuge, ground_truth_reeds]
+sources:
+  - "Hess, L. L., Melack, J. M. and Simonett, D. S. (1990). Radar detection of flooding beneath the forest canopy: a review. International Journal of Remote Sensing 11(7)"
+  - "AI water Model's flooded-vegetation class, seeded by double-bounce physics, the seasonal HH rise and coherence (read its card)"
+limits:
+  - "No independent labels exist for water under canopy, so this class is supported by radar physics and model agreement only; the Model card marks it unreliable."
+  - "Very dense wet canopy can hide the double bounce, and bright wet soil under grass can mimic it."
+status: prototype

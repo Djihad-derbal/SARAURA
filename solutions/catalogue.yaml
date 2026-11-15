@@ -201,6 +201,13 @@ orchard_tree_check:
   source: "Agricultural extension practice for fire-damaged orchards; olive trees resprout from the base after fire"
   check: "Green wood under the bark at the trunk base; new shoots in spring."
 
+check_unmapped_field:
+  title: "Check the field on the ground or ask the farmer"
+  what: "The burn map does not cover this field (it was harvested, bare or under cloud before the fire). Ask the farmer, look at the field, or compare optical images from before and after the fire."
+  cost: low
+  source: "Team practice; burn map coverage from the Model card"
+  check: "Ash, scorched stubble or burned trees at the field edges."
+
 firebreak_field_edge:
   title: "Keep a clear strip between the field and the forest"
   what: "A ploughed or grazed strip along the forest edge stops the next summer's fire from running into the field."
@@ -332,3 +339,75 @@ flexible_pipe_joints:
   cost: medium
   source: "American Lifelines Alliance (2005). Seismic Guidelines for Water Pipelines; O'Rourke and Liu (1999), MCEER Monograph 3"
   check: "Where exactly the ground moved along the pipe route (this map, then a survey)."
+
+# ---------------------------------------------------------------- a wetland flood season
+
+flood_watch_pass:
+  title: "Follow the flood with each Pass"
+  what: "NISAR maps the delta every 12 days through cloud, day or night. Compare each new map with the last one, and with the river gauge upstream at Mohembo, whose rise tells months ahead how big the flood will be in the lower delta."
+  cost: low
+  source: "Okavango Research Institute (University of Botswana) flood monitoring; McCarthy et al. (2003), Ambio 32(7)"
+  check: "The water level at the nearest channel or lagoon."
+
+plan_access_by_flood:
+  title: "Plan access for the flood months"
+  what: "Where the flood reaches, move game drives to dry islands, switch to boats (mokoro) or flights, and stock camps with fuel and food before the tracks close."
+  cost: medium
+  source: "Team practice; flood arrival dates from this map"
+  check: "Which tracks and airstrips still serve the camp (the tracks question)."
+
+build_above_flood_line:
+  title: "Build and store above the highest water"
+  what: "Put buildings, fuel, waste pits and boreholes on ground that stays dry even in big flood years, with a margin above this season's water: spills and waste on the floodplain go straight into the delta."
+  cost: medium
+  source: "Okavango Delta Management Plan (Government of Botswana, 2008); Okavango Delta UNESCO World Heritage Site (2014)"
+  check: "Flood marks from past big years, from local elders or camp records."
+
+herd_flood_recession:
+  title: "Graze and farm as the water drops"
+  what: "Floodplains that were under water briefly are the delta's best grazing and flood-recession (molapo) fields once the water drops: plant into the moist soil and bring herds onto the new grass, but leave before the next flood."
+  cost: low
+  source: "Okavango Delta Management Plan (Government of Botswana, 2008): molapo flood-recession farming"
+  check: "Soil firm enough to walk and plough; the date the water left (the change question)."
+
+move_herds_early:
+  title: "Move herds and stores off the floodplain before the water arrives"
+  what: "The flood reaches the lower delta weeks after the upper delta. Use the arrival dates on this map to move cattle, stored crops and gear to dry ground before the water reaches them."
+  cost: low
+  source: "Team practice; flood arrival dates from this map"
+  check: "The water level at the nearest channel."
+
+ground_truth_reeds:
+  title: "Check the hidden water from a boat or the air"
+  what: "Water under reeds is not checked against independent labels. Before acting on it, confirm it on a mokoro trip, a flight or with a guide who knows the channels."
+  cost: low
+  source: "Hess, Melack and Simonett (1990), International Journal of Remote Sensing 11(7): radar sees flooding under canopy, with known pitfalls"
+  check: "Standing water at the foot of the reeds or papyrus."
+
+wildlife_water_refuge:
+  title: "Count the hidden water in wildlife and water plans"
+  what: "Water under papyrus and reeds is fish breeding ground and habitat for sitatunga and wading birds, and a large part of the delta's water: count it in habitat maps and water reports, not only the open water optical images see."
+  cost: low
+  source: "Okavango Delta Ramsar Site and UNESCO World Heritage Site (2014)"
+  check: "Wildlife counts or bird surveys in the flagged reed beds."
+
+close_track_flood_season:
+  title: "Close or reroute the track for the flood months"
+  what: "Mark the flooding sections and drive only on dry alternatives while the water is there. Vehicles stuck in flooded tracks cut ruts that the next flood deepens."
+  cost: low
+  source: "Team practice; flood arrival dates from this map"
+  check: "Depth at the crossing and firm ground on both sides."
+
+raise_or_reroute_track:
+  title: "Raise the track, add culverts, or move it to higher ground"
+  what: "For a section under water most of the season, a low causeway with culverts, a log bridge, or a new line along higher ground keeps it open. Works in the delta need an environmental assessment."
+  cost: high
+  source: "Botswana Environmental Assessment Act (2011), for works in the delta"
+  check: "Where the higher ground runs (the safe-ground question) and how the water flows across the track."
+
+notify_camps_change:
+  title: "Send the change to camps, villages and the district"
+  what: "After each Pass, share where the water arrived or drew back near camps, airstrips and villages with operators, community trusts and the district council."
+  cost: low
+  source: "Team practice; NISAR repeats every 12 days"
+  check: "Who runs each camp and village on the list."

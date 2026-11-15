@@ -1,0 +1,44 @@
+id: w2_dry_ground
+title: "Where is it safe to graze, farm or build a track?"
+topic: "Safe ground"
+short: "Ground that stayed dry all season, ground beside the flood, short floods that suit grazing and flood-recession farming, and long floods to keep out of."
+lens: wetland
+recipe: dry_ground
+order: 2
+evidence: [pred_wetland, wet_days, dist_wet_m]
+thresholds:
+  near_m: 200           # dry ground this close to this year's water is "beside the flood"
+  long_days: 36         # under water for more than three 12-day Passes
+classes:
+  - value: 1
+    label: "Dry all season: build, store or drive"
+    color: "#1a9850"
+    verdict: good
+    meaning: "Never under water this season, open or under vegetation, and more than 200 m from any water."
+    solutions: [build_above_flood_line, flood_watch_pass]
+  - value: 2
+    label: "Dry, beside the flood"
+    color: "#d9ef8b"
+    verdict: caution
+    meaning: "Stayed dry this season but lies within 200 m of water: a bigger flood can reach it."
+    solutions: [build_above_flood_line, flood_watch_pass]
+  - value: 3
+    label: "Short flood: graze or farm after it drops"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "Under water for 36 days or less: floodplain grass and moist soil once the water drops, but not for tracks or buildings."
+    solutions: [herd_flood_recession, move_herds_early]
+  - value: 4
+    label: "Long flood: keep tracks and buildings out"
+    color: "#2563eb"
+    verdict: bad
+    meaning: "Under water, open or under vegetation, for more than 36 days this season."
+    solutions: [plan_access_by_flood, herd_flood_recession]
+sources:
+  - "Days under water from the AI water Model's maps on every Pass, open water and flooded vegetation together (each wet Pass counts until the next Pass)"
+  - "Okavango Delta Management Plan (Government of Botswana, 2008): flood-recession (molapo) farming and land use around the flood"
+limits:
+  - "Counts water under vegetation as water, so it errs on the side of caution; that class is not checked against independent labels."
+  - "One season only, starting 26 June: water that came and went before then is not counted, and a bigger flood year reaches further."
+  - "40 m pixels: a small raised island or a track embankment narrower than that is not resolved."
+status: prototype

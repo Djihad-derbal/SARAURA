@@ -1,0 +1,33 @@
+id: w5_since_last_pass
+title: "Where did the water arrive or leave since the last Pass?"
+topic: "Change since last pass"
+short: "Where the flood advanced or drew back between the last two 12-day Passes, with the change around camps and villages first."
+lens: wetland
+recipe: water_change
+order: 5
+evidence: [pred_wetland, osm_camps, osm_places]
+context: [places, camps]
+thresholds:
+  min_cells: 5          # a changed pixel is kept when 5 of its 3 x 3 neighbours (120 m) changed the same way
+  radius_m: 1000        # change counted around each camp, airstrip and village
+  min_ha: 5             # listed once 5 ha changed around it
+classes:
+  - value: 1
+    label: "Water left"
+    color: "#e7d7a8"
+    verdict: good
+    meaning: "Under water on the previous Pass, dry on the last one: the flood drew back here."
+    solutions: [notify_camps_change, confirm_next_pass]
+  - value: 2
+    label: "Water arrived"
+    color: "#2563eb"
+    verdict: caution
+    meaning: "Dry on the previous Pass, under water on the last one: the flood advanced here."
+    solutions: [notify_camps_change, move_herds_early, confirm_next_pass]
+sources:
+  - "AI water Model's maps on the last two NISAR Passes, 12 days apart, open water and flooded vegetation together"
+limits:
+  - "Two Passes only: wind on open water or rain on the floodplain can flip a few pixels. A change still there 12 days later is real."
+  - "Patches smaller than about 120 m are dropped as noise."
+features: points
+status: prototype

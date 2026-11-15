@@ -145,7 +145,7 @@ def test_answers_api():
     assert c.get(f"/answers/{site}/at", params={"lon": (w + e) / 2, "lat": (s + n) / 2}).status_code == 200
     assert c.get(f"/answers/{site}/at", params={"lon": w - 1, "lat": s - 1}).status_code == 422
     assert c.get(f"/answers/{site}", params={"role": "nobody"}).status_code == 404
-    assert c.get("/answers/okavango_wetland").status_code == 404  # no Questions for the wetland Lens yet
+    assert c.get("/answers/kamchatka_volcano").status_code == 404  # no Questions for the volcano Lens yet
 
 
 @pytest.mark.skipif(not BUILT, reason="no answers built")
@@ -187,7 +187,11 @@ def test_sites_lead_with_their_questions():
     for sid in BUILT:
         d = sites[sid]["decide"]
         assert d and d["questions"] and d["roles"] and d["cover_layer"].startswith("ans_")
-    assert any(s["decide"] is None for s in sites.values())  # places without questions stay research-only
+    from pipeline.answers import questions
+
+    for s in sites.values():  # places without questions for their Lens stay research-only
+        if not questions(s.get("lens")):
+            assert s["decide"] is None
 
 
 # ---------------------------------------------------------------- Jijel, next questions (A5, A7, A9)
@@ -232,6 +236,9 @@ def test_jijel_burned_fields_and_changes_are_listed():
     farms = json.loads(config.data.read_text("algeria_ne_wildfire/answers/a5_farms_burned_items.json"))
     assert farms and all(f["class"] in (1, 2) and 0 < f["burned_ha"] <= f["area_ha"] + 0.1 for f in farms)
     assert "OpenStreetMap" in qs["a5_farms_burned"]["headline"]
+    if doc["evidence"].get("burn_unmapped_share"):  # a burn map that covers only part of the site: its gaps are "not mapped", never "not burned"
+        classes = {c["value"]: c for c in qs["a5_farms_burned"]["classes"]}
+        assert classes[4]["verdict"] == "unknown" and classes[4]["area_ha"] > 0
     changes = json.loads(config.data.read_text("algeria_ne_wildfire/answers/a9_since_last_pass_items.json"))
     assert changes and changes[0]["class"] == 1  # lost vegetation is listed first
     assert "19 Oct" in qs["a9_since_last_pass"]["headline"]

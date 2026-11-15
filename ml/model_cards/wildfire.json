@@ -1,18 +1,26 @@
 {
   "lens": "wildfire",
   "name": "wildfire",
-  "job": "Map burned land through smoke and cloud from the NISAR time series",
+  "job": "Map land burned in the August 2026 fires through smoke and cloud, from NISAR HH and HV before and after the fire",
   "user": "Post-fire emergency teams, forest managers",
   "sites": [
-    "algeria_ne_wildfire",
-    "washington_sinlahekin_wildfire"
+    "algeria_ne_wildfire"
   ],
   "inputs": [
-    "hh_db",
-    "hv_db",
-    "hh_minus_median",
-    "hv_minus_median",
-    "days_since_first_pass"
+    "pre_hh",
+    "pre_hv",
+    "post_hh",
+    "post_hv",
+    "delta_hh",
+    "delta_hv",
+    "pre_hv_hh",
+    "post_hv_hh",
+    "pre_sd_hh",
+    "pre_sd_hv",
+    "post_sd_hh",
+    "post_sd_hv",
+    "z_hh",
+    "z_hv"
   ],
   "outputs": [
     {
@@ -28,55 +36,76 @@
   ],
   "labels": {
     "kind": "proxy",
-    "source": "Sentinel-2 burn index (dNBR >= 0.27 on vegetation), tile 32SKF",
-    "notes": "Scores measure agreement with optical labels, not field truth or official perimeters"
+    "source": "Sentinel-2 burn index: dNBR >= 0.27 burned, dNBR < 0.1 unburned, on land with pre-fire NDVI >= 0.3; composites 20 Jul-20 Aug and 1-30 Sep 2026",
+    "notes": "Low-severity and ambiguous changes are left out of training, not labelled unburned. Scores measure agreement with optical proxy labels, not field truth or official perimeters"
   },
   "baseline": {
-    "name": "HV drop > 1.5 dB",
-    "metric": "burned IoU",
-    "score": 0.2067
+    "name": "HV drop rule",
+    "metric": "burned IoU, held-out spatial test blocks (Sentinel-2 proxy labels)",
+    "score": 0.3289
   },
   "model": {
-    "name": "ChangeUTAE (U-Net + temporal attention)",
-    "metric": "burned IoU",
-    "score": 0.8575,
-    "framework": "PyTorch, exported to ONNX",
-    "parameters": 477446
+    "name": "U-Net on pre- and post-fire HH/HV composites (3 Passes each)",
+    "metric": "burned IoU, held-out spatial test blocks (Sentinel-2 proxy labels)",
+    "score": 0.9181,
+    "framework": "PyTorch"
   },
   "extra_scores": [
     {
       "name": "Gradient-boosted trees",
-      "metric": "burned IoU",
-      "score": 0.6746
+      "metric": "burned IoU, held-out spatial test blocks (Sentinel-2 proxy labels)",
+      "score": 0.5634
     },
     {
-      "name": "Change-point rules (burned + vegetation loss merged)",
-      "metric": "IoU",
-      "score": 0.3907
+      "name": "U-Net, low end of the block-bootstrap 95% interval (23 test blocks)",
+      "metric": "burned IoU, held-out spatial test blocks (Sentinel-2 proxy labels)",
+      "score": 0.8042
     },
     {
-      "name": "ChangeUTAE (burned + vegetation loss merged)",
-      "metric": "IoU",
-      "score": 0.8515
+      "name": "HV drop rule, high end of the block-bootstrap 95% interval",
+      "metric": "burned IoU, held-out spatial test blocks (Sentinel-2 proxy labels)",
+      "score": 0.3752
     },
     {
-      "name": "ChangeUTAE on washington_sinlahekin_wildfire, not retrained",
-      "metric": "burned IoU",
-      "score": 0.3572
+      "name": "U-Net",
+      "metric": "PR-AUC, held-out spatial test blocks",
+      "score": 0.9675
     },
     {
-      "name": "Baseline on washington_sinlahekin_wildfire, not retrained",
-      "metric": "burned IoU",
-      "score": 0.1808
+      "name": "Gradient-boosted trees",
+      "metric": "PR-AUC, held-out spatial test blocks",
+      "score": 0.8125
+    },
+    {
+      "name": "HV drop rule",
+      "metric": "PR-AUC, held-out spatial test blocks",
+      "score": 0.4482
+    },
+    {
+      "name": "U-Net (selection)",
+      "metric": "burned IoU, validation blocks",
+      "score": 0.9459
+    },
+    {
+      "name": "Gradient-boosted trees",
+      "metric": "burned IoU, validation blocks",
+      "score": 0.6082
+    },
+    {
+      "name": "HV drop rule",
+      "metric": "burned IoU, validation blocks",
+      "score": 0.3014
     }
   ],
-  "split": "Spatial blocks within one fire complex; test cells not covered by any training patch",
+  "split": "The area is cut into 256 x 256-pixel blocks (5 km) with a 16-pixel buffer, assigned to train, validation and test inside the one fire complex. The Model is chosen on validation burned IoU and its decision threshold (0.875) is set on validation; all three methods are scored on the same test blocks at the true class balance.",
   "limits": [
-    "Trained on one fire complex, one track (109 descending), ten Passes",
-    "Only 'burned' is learned; other change classes scored near zero and are not shown",
-    "On Washington (not retrained) it finds about a third of the optically burned land, but 91% of what it flags is burned; the Washington labels may also count late-summer drying of grass and shrubs as burned (dNBR from July to September), which lowers recall",
-    "Algeria's site box is larger than the training box; the edge strips are unseen ground"
+    "One fire complex, one track (109 descending), Passes of 15 Jul to 25 Sep 2026: no demonstrated transfer to another fire or biome (not tested on Washington).",
+    "The map covers only land the radar observed that was vegetated before the fire (Sentinel-2 NDVI 0.3 or more, 2 or more clear scenes): 42% of the site has no class (sea, bare or harvested ground, cloudy pre-fire optical). The questions read those pixels as not burned.",
+    "Because that area is set by optical images, the map cannot be rerun from radar alone.",
+    "Clearing, drought, wet soil and radar geometry (layover and shadow on steep slopes) can look like burning.",
+    "The full map includes the training blocks; only the test blocks measure performance.",
+    "Scores are uncalibrated; 20 m pixels after 3 x 3 smoothing are not 20 m independent resolution. Not an active-fire or alert product."
   ],
   "status": "prototype",
-  "updated": "2026-11-13"
+  "updated": "2026-11-15"
 }

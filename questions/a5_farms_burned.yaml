@@ -10,6 +10,7 @@ context: [fields, places]
 thresholds:
   mostly: 0.5            # half or more of the field's 20 m pixels burned
   partly: 0.1
+  min_mapped: 0.5        # a field is "not mapped" when the burn map classes less than half of its pixels
 classes:
   - value: 1
     label: "Mostly burned (half or more)"
@@ -29,12 +30,18 @@ classes:
     verdict: good
     meaning: "The radar burn map shows little or no burning in this field."
     solutions: [firebreak_field_edge]
+  - value: 4
+    label: "Not mapped by the burn map"
+    color: "#9ca3af"
+    verdict: unknown
+    meaning: "Most of this field lies outside the burn map, which covers only land that was green before the fire: a harvested or bare field, or cloud in the optical images. The radar cannot say here whether it burned."
+    solutions: [check_unmapped_field]
 sources:
-  - "Burn map: the wildfire Model (burned IoU 0.86 against Sentinel-2 dNBR) where it exists, else the Baseline"
+  - "Burn map: the wildfire Model where it is installed (read its card for its score against Sentinel-2 dNBR), else the Baseline"
   - "Fields, orchards and meadows drawn by OpenStreetMap contributors (landuse=farmland, orchard, meadow, vineyard), ODbL"
 limits:
   - "Only fields drawn in OpenStreetMap are counted. Many farms around Jijel are not mapped, so the true burned farmland is larger."
-  - "The burn map was made for forest and scrub; a harvested field that burned as stubble may be missed."
+  - "The burn map was made for forest and scrub; a harvested field that burned as stubble may be missed, and fields mostly outside the map are marked 'not mapped' rather than 'not burned'. The burned share is of the part the map covers."
   - "Fields smaller than one 20 m pixel are not measured."
   - "Owners and crops are not known: the list gives places and hectares, and the agricultural services add the rest."
 features: points

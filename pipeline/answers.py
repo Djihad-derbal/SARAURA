@@ -551,18 +551,22 @@ def farms_burned(ctx: dict, q: dict) -> dict:
     fields = polygons_of(ctx["fields"])
     geo20 = Geo(ctx["g20"])
     burned = A["burned20"]
+    known = A.get("known20", np.ones_like(burned))
     n = len(fields)
     ids20 = rasterize_ids(geo20, [g for _, g in fields])
     px = np.bincount(ids20.ravel(), minlength=n + 1)
+    kpx = np.bincount(ids20.ravel(), weights=known.ravel().astype(np.float64), minlength=n + 1)  # pixels the burn map classed
     bpx = np.bincount(ids20.ravel(), weights=burned.ravel().astype(np.float64), minlength=n + 1)
     ha20 = ctx["g20"]["res"] ** 2 / 1e4
     with np.errstate(invalid="ignore", divide="ignore"):
-        share = np.where(px > 0, bpx / np.maximum(px, 1), np.nan)
-    k = np.zeros(n + 1, np.uint8)  # class per field id: 1 mostly burned, 2 partly, 3 not burned, 0 too small to see
+        share = np.where(kpx > 0, bpx / np.maximum(kpx, 1), np.nan)  # burned share of the part the map covers
+        unmapped = (px > 0) & (kpx < T.get("min_mapped", 0.5) * px)
+    k = np.zeros(n + 1, np.uint8)  # class per field id: 1 mostly burned, 2 partly, 3 not burned, 4 not mapped, 0 too small to see
     with np.errstate(invalid="ignore"):
         k[1:][np.isfinite(share[1:])] = 3
         k[1:][share[1:] >= T["partly"]] = 2
         k[1:][share[1:] >= T["mostly"]] = 1
+    k[1:][unmapped[1:]] = 4
     ids60 = rasterize_ids(geo, [g for _, g in fields], all_touched=True)  # small fields stay visible at 60 m
     cls = k[ids60]
     near = Near(ctx)
@@ -591,6 +595,10 @@ def farms_burned(ctx: dict, q: dict) -> dict:
                 + (f", most of it {top}s ({by_kind[top]:,.0f} ha)." if top else "."))
     else:
         head = f"The only mapped field ({mapped_ha:,.0f} ha) did not burn." if n == 1 else f"None of the {n} mapped fields ({mapped_ha:,.0f} ha) burned."
+    n4 = int((k[1:] == 4).sum())
+    if n4:
+        head += (f" {n4} fields ({float(px[1:][k[1:] == 4].sum() * ha20):,.0f} ha) lie mostly outside the burn map, which covers only land "
+                 "that was green before the fire (harvested or bare fields are left out): check them on the ground.")
     head += " Only fields drawn in OpenStreetMap are counted, so the real total is higher."
     return {
         "array": cls,
@@ -1006,12 +1014,264 @@ def lifelines_crossed(ctx: dict, q: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------- wetland recipes
+
+CAMP_KINDS = {"camp_site": "Camp site", "lodge": "Camp or lodge", "hotel": "Camp or lodge", "guest_house": "Camp or lodge",
+              "chalet": "Camp or lodge", "aerodrome": "Airstrip", "airstrip": "Airstrip"}
+
+
+def _day_month(s: str) -> str:
+    d = dt.date.fromisoformat(s)
+    return f"{d.day} {d.strftime('%b')}"
+
+
+MERGE_PX = 5  # camps, airstrips or villages closer than this many pixels (200 m at 40 m) are one place
+
+
+def _exposure(ctx: dict) -> list[dict]:
+    """Named camps, lodges, airstrips and villages inside the map, one per name (OpenStreetMap)."""
+    geo, out, seen = ctx["geo"], [], set()
+    for fc, kinds in ((ctx.get("camps"), CAMP_KINDS), (ctx.get("places"), {k: "Village" for k in PLACE_KINDS})):
+        for props, lon, lat in points_of(geo, fc or {"features": []}, tuple(kinds)):
+            name = props["name"]
+            if not name or name in seen:
+                continue
+            r, c = geo.rc_lonlat(lon, lat)
+            near = any(abs(o["r"] - r) + abs(o["c"] - c) <= MERGE_PX for o in out)  # one camp mapped twice (lodge + camp site)
+            if geo.inside(r, c) and not near:
+                seen.add(name)
+                out.append({"name": name, "kind": kinds[props["class"]], "lon": round(lon, 5), "lat": round(lat, 5), "r": int(r), "c": int(c)})
+    return out
+
+
+def _disc_window(ctx: dict, r: int, c: int, radius_m: float):
+    H, W = ctx["geo"].g["shape"]
+    rad = max(1, int(round(radius_m / ctx["geo"].g["res"])))
+    r0, r1, c0, c1 = max(0, r - rad), min(H, r + rad + 1), max(0, c - rad), min(W, c + rad + 1)
+    k = disc(rad)[(r0 - (r - rad)):(r0 - (r - rad)) + (r1 - r0), (c0 - (c - rad)):(c0 - (c - rad)) + (c1 - c0)]
+    return (slice(r0, r1), slice(c0, c1)), k
+
+
+def _wet(stack: np.ndarray) -> np.ndarray:
+    return (stack == evidence.WL_OPEN) | (stack == evidence.WL_VEG)
+
+
+def water_reach(ctx: dict, q: dict) -> dict:
+    E, T, S, dates = ctx["E"], q["thresholds"], ctx["stack"], ctx["dates"]
+    ow, seen = E["ow_share"], E["seen_passes"]
+    cls = np.zeros(ow.shape, np.uint8)
+    with np.errstate(invalid="ignore"):
+        cls[seen > 0] = 1
+        cls[ow > 0] = 2
+        cls[ow >= T["most_share"]] = 3
+        cls[ow >= T["always_share"]] = 4
+    items = []
+    for p in _exposure(ctx):
+        win, k = _disc_window(ctx, p["r"], p["c"], T["radius_m"])
+        sub = S[:, win[0], win[1]][:, k]                     # (Passes, pixels in the disc)
+        ok = sub != 255
+        n = ok.sum(1)
+        share = np.where(n > 0, 100.0 * (sub == evidence.WL_OPEN).sum(1) / np.maximum(n, 1), np.nan)
+        if not np.isfinite(share).any() or np.nanmax(share) < T["min_share_pct"]:
+            continue
+        first = next(i for i, s in enumerate(share) if np.isfinite(s) and s >= T["min_share_pct"])
+        peak = int(np.nanargmax(share))
+        items.append({"name": p["name"], "kind": p["kind"], "lon": p["lon"], "lat": p["lat"],
+                      "peak_share": round(float(share[peak])), "peak_date": _day_month(dates[peak]), "first_wet": _day_month(dates[first]),
+                      "now_share": round(float(share[-1])) if np.isfinite(share[-1]) else None,
+                      "class": 3 if share[peak] >= 100 * T["most_share"] else 2})
+    items.sort(key=lambda i: (-i["peak_share"], -(i["now_share"] or 0)))
+    km2 = ctx["ev_stats"]["open_water_km2"]
+    pk = int(np.argmax(km2))
+    top = ", ".join(i["name"] for i in items[:3])
+    return {
+        "array": cls,
+        "items": items,
+        "headline": f"Open water spread from {km2[0]:,.0f} km² on {_day_month(dates[0])} to a peak of {km2[pk]:,.0f} km² on {_day_month(dates[pk])}, "
+                    f"and was down to {km2[-1]:,.0f} km² by {_day_month(dates[-1])} ({len(dates)} Passes). "
+                    f"{len(items)} camps, airstrips and villages had water on at least {T['min_share_pct']:g}% of the ground within {T['radius_m']:.0f} m"
+                    + (f"; the most: {top}." if top else "."),
+        "ranked": {"title": f"Camps, airstrips and villages the water reached (open water within {T['radius_m']:.0f} m)",
+                   "columns": [{"key": "name", "label": "Place"}, {"key": "kind", "label": "Type"},
+                               {"key": "peak_share", "label": "Water at peak", "unit": "%"}, {"key": "peak_date", "label": "Peak"},
+                               {"key": "first_wet", "label": "Water arrived"}, {"key": "now_share", "label": "Water now", "unit": "%"}],
+                   "rows": items},
+    }
+
+
+def dry_ground(ctx: dict, q: dict) -> dict:
+    E, T = ctx["E"], q["thresholds"]
+    days, dist, seen = E["wet_days"], E["dist_wet_m"], E["seen_passes"]
+    cls = np.zeros(days.shape, np.uint8)
+    with np.errstate(invalid="ignore"):
+        dry = (seen > 0) & (days == 0)
+        cls[dry & (dist > T["near_m"])] = 1
+        cls[dry & (dist <= T["near_m"])] = 2
+        cls[(days > 0) & (days <= T["long_days"])] = 3
+        cls[days > T["long_days"]] = 4
+    n = (cls > 0).sum()
+    sh = {i: _pct((cls == i).sum(), n) for i in (1, 2, 3, 4)}
+    return {"array": cls,
+            "headline": f"{sh[1]:.0f}% of the map stayed dry all season and more than {T['near_m']:.0f} m from water: room for tracks, stores and buildings. "
+                        f"{sh[2]:.0f}% stayed dry but lies right beside the flood. {sh[3]:.0f}% was under water for {T['long_days']:.0f} days or less and suits "
+                        f"grazing or flood-recession farming once the water drops; {sh[4]:.0f}% stayed under water for longer."}
+
+
+def hidden_water(ctx: dict, q: dict) -> dict:
+    E, T, dates = ctx["E"], q["thresholds"], ctx["dates"]
+    fv = E["fv_share"]
+    cls = np.zeros(fv.shape, np.uint8)
+    with np.errstate(invalid="ignore"):
+        cls[fv > 0] = 1
+        cls[fv >= T["most_share"]] = 2
+    ow_km2, fv_km2 = ctx["ev_stats"]["open_water_km2"], ctx["ev_stats"]["flooded_veg_km2"]
+    pk = int(np.argmax(fv_km2))
+    hid = _pct(fv_km2[pk], fv_km2[pk] + ow_km2[pk])
+    most_km2 = (cls == 2).sum() * ctx["geo"].g["res"] ** 2 / 1e6
+    return {"array": cls,
+            "headline": f"Water under reeds and papyrus peaked at {fv_km2[pk]:,.0f} km² on {_day_month(dates[pk])}: {hid:.0f}% of all the water the radar mapped that day, "
+                        f"which optical satellites cannot see. {most_km2:,.0f} km² was under vegetation on most Passes. "
+                        "This class is supported by radar physics, not by independent labels."}
+
+
+def tracks_flooded(ctx: dict, q: dict) -> dict:
+    T, geo, S, dates = q["thresholds"], ctx["geo"], ctx["stack"], ctx["dates"]
+    cls = np.zeros(geo.g["shape"], np.uint8)
+    places = _exposure(ctx)
+    plon = np.array([p["lon"] for p in places]) if places else np.zeros(0)
+    plat = np.array([p["lat"] for p in places]) if places else np.zeros(0)
+    items = []
+    step = geo.g["res"] / 2
+    for props, xy in project_lines(geo, ctx["tracks"]):
+        pts, dist = densify(xy, step)
+        r, c = geo.rc(pts[:, 0], pts[:, 1])
+        inb = geo.inside(r, c)
+        if not inb.any():
+            continue
+        seq = np.full((len(dates), len(r)), 255, np.uint8)
+        seq[:, inb] = S[:, r[inb], c[inb]]
+        seg = (dist // T["segment_m"]).astype(int)
+        for sgi in np.unique(seg):
+            mk = (seg == sgi) & inb
+            if mk.sum() < 3:
+                continue
+            sub = seq[:, mk]
+            ok = sub != 255
+            n_ok = ok.sum(1)
+            share = np.where(n_ok > 0, _wet(sub).sum(1) / np.maximum(n_ok, 1), np.nan)
+            wet_pass = share >= T["wet_share"]
+            n_seen, n_wet = int((n_ok > 0).sum()), int(wet_pass.sum())
+            if n_wet < T["min_passes"]:
+                continue
+            k = 2 if n_wet >= T["most_share"] * n_seen else 1
+            j = int(np.flatnonzero(mk)[mk.sum() // 2])
+            lon, lat = geo.inv.transform(pts[j, 0], pts[j, 1])
+            kind = "Track" if props["class"] == "track" else "Road"
+            name = props["ref"] or props["name"]
+            if not name and len(plon):
+                dx, dy = (lon - plon) * 111.32 * math.cos(math.radians(lat)), (lat - plat) * 110.57
+                d = np.hypot(dx, dy)
+                i = int(np.argmin(d))
+                name = f"{kind} {d[i]:.0f} km {compass(dx[i], dy[i])} of {places[i]['name']}" if d[i] >= 1 else f"{kind} at {places[i]['name']}"
+            first = int(np.argmax(wet_pass))
+            item = {"name": name or f"Unnamed {kind.lower()}", "kind": kind, "lon": round(lon, 5), "lat": round(lat, 5),
+                    "wet_passes": n_wet, "of_passes": n_seen, "first_wet": _day_month(dates[first]), "first_i": first,
+                    "wet_now": "yes" if wet_pass[-1] else "no", "class": k, "coords": line_coords(geo, pts[mk])}
+            prev = items[-1] if items else None
+            if prev and prev["name"] == item["name"] and prev["class"] == k and prev["wet_now"] == item["wet_now"] \
+                    and abs(prev["lat"] - lat) + abs(prev["lon"] - lon) < 0.012:
+                prev["coords"] += item["coords"]   # merge neighbouring sections of one track
+                prev["length_km"] += T["segment_m"] / 1000
+                prev["wet_passes"] = max(prev["wet_passes"], n_wet)
+                if first < prev["first_i"]:
+                    prev["first_i"], prev["first_wet"] = first, item["first_wet"]
+            else:
+                item["length_km"] = T["segment_m"] / 1000
+                items.append(item)
+            rr, cc = r[mk], c[mk]
+            np.maximum.at(cls, (rr, cc), k)
+    for i in items:
+        i["length_km"] = round(i["length_km"], 1)
+        i.pop("first_i")
+    items.sort(key=lambda i: (-i["class"], i["wet_now"] != "yes", -i["wet_passes"], -i["length_km"]))
+    km = {k: sum(i["length_km"] for i in items if i["class"] == k) for k in (1, 2)}
+    now = sum(i["length_km"] for i in items if i["wet_now"] == "yes")
+    return {
+        "array": dilate(cls),
+        "items": items,
+        "headline": f"{km[2]:,.0f} km of tracks and roads were under water on most Passes and {km[1]:,.0f} km on some; "
+                    f"{now:,.0f} km were still under water on {_day_month(dates[-1])}, the last Pass.",
+        "ranked": {"title": f"Track and road sections that flood ({T['segment_m']:.0f} m sections, merged along each track)",
+                   "columns": [{"key": "name", "label": "Track or road"}, {"key": "length_km", "label": "Length", "unit": "km"},
+                               {"key": "wet_passes", "label": "Passes under water"}, {"key": "first_wet", "label": "Flooded from"},
+                               {"key": "wet_now", "label": "Under water now"}],
+                   "rows": items},
+    }
+
+
+def water_change(ctx: dict, q: dict) -> dict:
+    from scipy import ndimage
+
+    T, S, dates, geo = q["thresholds"], ctx["stack"], ctx["dates"], ctx["geo"]
+    a, b = S[-2], S[-1]
+    ok = (a != 255) & (b != 255)
+    wa, wb = _wet(a), _wet(b)
+    left = ok & wa & ~wb
+    came = ok & ~wa & wb
+    keep = lambda m: m & (ndimage.uniform_filter(m.astype(np.float32), size=3, mode="constant") * 9 >= T["min_cells"] - 0.01)
+    left, came = keep(left), keep(came)
+    cls = np.zeros(a.shape, np.uint8)
+    cls[left] = 1
+    cls[came] = 2
+    cell_ha = geo.g["res"] ** 2 / 1e4
+    items = []
+    for p in _exposure(ctx):
+        win, k = _disc_window(ctx, p["r"], p["c"], T["radius_m"])
+        sub = cls[win][k]
+        arr, lft = float((sub == 2).sum() * cell_ha), float((sub == 1).sum() * cell_ha)
+        if max(arr, lft) < T["min_ha"]:
+            continue
+        items.append({"name": p["name"], "kind": p["kind"], "lon": p["lon"], "lat": p["lat"], "arrived_ha": round(arr), "left_ha": round(lft),
+                      "class": 2 if arr > lft else 1})
+    items.sort(key=lambda i: (-i["arrived_ha"], -i["left_ha"]))
+    km_l, km_a = left.sum() * cell_ha / 100, came.sum() * cell_ha / 100
+    coll = ctx["ev_stats"].get("collections") or []
+    note = ""
+    if len(coll) >= 2 and coll[-1] and coll[-2] and coll[-1] != coll[-2]:
+        note = f" The two Passes come from different calibrations ({coll[-2]} and {coll[-1]}), so part of the change may not be real."
+    trend = "receding" if km_l > 1.5 * km_a else "rising" if km_a > 1.5 * km_l else "holding"
+    n_arr = sum(i["arrived_ha"] >= T["min_ha"] for i in items)
+    return {
+        "array": cls,
+        "items": items,
+        "headline": f"Between {_day_month(dates[-2])} and {_day_month(dates[-1])} water left {km_l:,.0f} km² and arrived on {km_a:,.0f} km²: the flood is {trend}. "
+                    + (f"{n_arr} {'camp, airstrip or village' if n_arr == 1 else 'camps, airstrips or villages'} saw water arrive within {T['radius_m'] / 1000:g} km." if n_arr else
+                     f"No camp, airstrip or village saw water arrive within {T['radius_m'] / 1000:g} km.") + note,
+        "ranked": {"title": f"Change around camps, airstrips and villages (within {T['radius_m'] / 1000:g} km)",
+                   "columns": [{"key": "name", "label": "Place"}, {"key": "kind", "label": "Type"},
+                               {"key": "arrived_ha", "label": "Water arrived", "unit": "ha"}, {"key": "left_ha", "label": "Water left", "unit": "ha"}],
+                   "rows": items},
+    }
+
+
 RECIPES = {f.__name__: f for f in (safe_to_build, what_to_build, better_plots, lines_at_risk, burned_slopes, roads_to_watch, replant_first, forest_recovery,
-                                   farms_burned, mud_to_water, since_last_pass, inspect_first, rebuild_where, still_moving, lifelines_crossed)}
+                                   farms_burned, mud_to_water, since_last_pass, inspect_first, rebuild_where, still_moving, lifelines_crossed,
+                                   water_reach, dry_ground, hidden_water, tracks_flooded, water_change)}
 
 
 
 # ---------------------------------------------------------------- build
+
+
+def _model_evidence(lens: str, stats: dict) -> str | None:
+    """Which AI Model's map the rules read on this site, if any (said on the page so 'rules, not AI' is never wrong)."""
+    if lens == "wetland":
+        return "the AI water Model's maps of every Pass"
+    if lens == "earthquake" and stats.get("damage_source") == "pred_earthquake":
+        return "the AI damage Model's map"
+    if lens == "wildfire" and stats.get("burn_source") == "pred_wildfire":
+        return "the AI burn Model's map"
+    return None
 
 
 def _load_manifest(site_id: str) -> dict:
@@ -1046,6 +1306,11 @@ def build(site_id: str, log=print) -> int:
         ctx["flow"] = ev["flow"]
         ctx["g20"] = ev["grid20"]
         ctx["prev_date"] = ev["prev_date"]
+    elif m["lens"] == "wetland":
+        ev = evidence.wetland(site_id, m, log)
+        d = ev["date"]
+        ctx["E"] = {n: evidence.read(site_id, n, d, "evidence") for n in ev["hidden"]}
+        ctx["stack"], ctx["dates"] = ev["stack"], ev["dates"]
     else:
         raise RuntimeError(f"No evidence step for the {m['lens']} Lens yet")
     ctx["geo"] = Geo(ev["grid"])
@@ -1097,6 +1362,7 @@ def build(site_id: str, log=print) -> int:
         "questions": out_qs,
         "solutions": {s: solutions()[s] for s in used},
         "evidence": ev["stats"],
+        "model_evidence": _model_evidence(m["lens"], ev["stats"]),
         "attribution": "Maps and places: © OpenStreetMap contributors (ODbL); elevation: Copernicus GLO-30; radar: NASA/ISRO NISAR.",
     }
     config.data.write_text(f"{site_id}/answers/answers.json", json.dumps(doc, indent=1))
@@ -1237,6 +1503,72 @@ def _explain_earthquake(site_id: str, recipe: str, v: dict, q: dict, lon: float,
     return out
 
 
+def _wet_series(site_id: str, dates: list[str], lon: float, lat: float) -> list:
+    """The water Model's class at one spot on every Pass, lone wet pixels dropped as in the evidence (None where no data)."""
+    out = []
+    for d in dates:
+        v = _value_at(site_id, f"{site_id}/evidence/water_class_{d}.tif", lon, lat)
+        out.append(int(v) if np.isfinite(v) and v != 255 else None)
+    return out
+
+
+def _explain_wetland(site_id: str, recipe: str, v: dict, series: list, dates: list, q: dict, lon: float, lat: float, card: dict) -> list[str]:
+    """The numbers behind a wetland answer at one spot; sets card["measure"] where one number explains it."""
+    T, out = q["thresholds"], []
+    seen = [(d, c) for d, c in zip(dates, series) if c is not None]
+    if not seen:
+        return ["The radar maps have no data here (outside the swath)."]
+    n = len(seen)
+    ow = [d for d, c in seen if c == evidence.WL_OPEN]
+    fv = [d for d, c in seen if c == evidence.WL_VEG]
+    word = {0: "dry", evidence.WL_OPEN: "open water", evidence.WL_VEG: "water under vegetation"}
+    if recipe == "water_reach":
+        if ow:
+            out.append(f"Open water on {len(ow)} of {n} Passes, first on {_day_month(ow[0])} and last on {_day_month(ow[-1])}.")
+        elif fv:
+            out.append(f"Water under vegetation on {len(fv)} of the {n} Passes, though never open water.")
+        card["measure"] = _measure("Passes with open water", 100 * len(ow) / n, "% of Passes",
+                                   [(100 * T["most_share"], "most of the season"), (100 * T["always_share"], "all season")], top=100)
+    elif recipe == "dry_ground":
+        wet = [d for d, c in seen if c in (evidence.WL_OPEN, evidence.WL_VEG)]
+        days = v.get("days", float("nan"))
+        if wet:
+            out.append(f"Under water (open or under vegetation) on {len(wet)} of {n} Passes, about {days:.0f} days this season, from {_day_month(wet[0])}.")
+            card["measure"] = _measure("Days under water", days, "days", [(T["long_days"], "long flood")], top=max(days, 12 * n))
+        else:
+            dist = v.get("dist", float("nan"))
+            out.append(f"No water on any of the {n} Passes; the nearest water this season was about {dist:,.0f} m away."
+                       if np.isfinite(dist) and dist < evidence.WL_MAX_DIST_M else f"No water on any of the {n} Passes, nor within 5 km.")
+            out.append("A bigger flood year can reach further than this one: it is one season of radar.")
+    elif recipe == "hidden_water":
+        if fv:
+            out.append(f"Water under vegetation on {len(fv)} of {n} Passes, first on {_day_month(fv[0])}. The radar sees it because the water surface and the "
+                       "stems bounce the signal straight back (double bounce), which brightens HH.")
+            card["measure"] = _measure("Passes with water under reeds", 100 * len(fv) / n, "% of Passes", [(100 * T["most_share"], "most of the season")], top=100)
+        else:
+            out.append(f"No water under vegetation on any of the {n} Passes.")
+    elif recipe == "tracks_flooded":
+        it, dist = _nearest_item(site_id, q["id"], lon, lat, 200)
+        if it:
+            out.append(f"Nearest flooding section: {it['name']}, {dist:.0f} m away; under water on {it['wet_passes']} of {it['of_passes']} Passes from {it['first_wet']}"
+                       + ("; still under water on the last Pass." if it["wet_now"] == "yes" else "; dry on the last Pass."))
+            cl = next(c for c in q["classes"] if c["value"] == it["class"])
+            card.update({"class": cl["value"], "label": cl["label"], "verdict": cl["verdict"], "color": cl["color"], "solutions": cl["solutions"]})
+        else:
+            card.update({"class": None, "label": "No flooding track here", "verdict": None, "color": None, "solutions": []})
+            card["reasons"] = []
+            out.append("No mapped track or road within 200 m went under water this season.")
+    elif recipe == "water_change":
+        a, b = series[-2], series[-1]
+        if a is None or b is None:
+            out.append("One of the last two Passes has no data here.")
+        else:
+            out.append(f"{_day_month(dates[-2])}: {word.get(a, 'unknown')}; {_day_month(dates[-1])}: {word.get(b, 'unknown')}.")
+            if card.get("class") is None and (a in (1, 2)) != (b in (1, 2)):
+                out.append("The change is a lone patch of a few pixels, so it is left off the map: likely noise.")
+    return out
+
+
 def at_point(site_id: str, lon: float, lat: float) -> dict:
     """Every Question's answer at one spot: class, reasons with the numbers behind them, and solutions."""
     key = f"{site_id}/answers/answers.json"
@@ -1269,6 +1601,12 @@ def at_point(site_id: str, lon: float, lat: float) -> dict:
         vals = {"strain": _value_at(site_id, f"{L}strain_cm_km_{d}.tif", lon, lat), "vel": _value_at(site_id, f"{L}post_vel_cm_month_{d}.tif", lon, lat),
                 "coh": _value_at(site_id, f"{Ev}post_coherence_{d}.tif", lon, lat), "dmg": _value_at(site_id, f"{Ev}damage_class_{d}.tif", lon, lat),
                 "slope": _value_at(site_id, f"{Ev}slope80_{d}.tif", lon, lat)}
+    elif doc["lens"] == "wetland":
+        Ev = f"{site_id}/evidence/"
+        vals = {"ow": _value_at(site_id, f"{Ev}ow_share_{d}.tif", lon, lat), "fv": _value_at(site_id, f"{Ev}fv_share_{d}.tif", lon, lat),
+                "days": _value_at(site_id, f"{Ev}wet_days_{d}.tif", lon, lat), "dist": _value_at(site_id, f"{Ev}dist_wet_m_{d}.tif", lon, lat)}
+        wl_dates = doc.get("evidence", {}).get("pass_dates") or []
+        wl_series = _wet_series(site_id, wl_dates, lon, lat)
     for q in doc["questions"]:
         qf = qfiles[q["id"]]
         card = {"question": q["id"], "title": q["title"], "topic": qf.get("topic"), "class": None, "label": None, "verdict": None, "color": None, "reasons": [], "solutions": []}
@@ -1303,6 +1641,8 @@ def at_point(site_id: str, lon: float, lat: float) -> dict:
                 card.update({"class": None, "label": "No line here", "verdict": None, "color": None, "solutions": []})
         elif recipe in ("inspect_first", "rebuild_where", "still_moving", "lifelines_crossed"):
             card["reasons"] += _explain_earthquake(site_id, recipe, vals, qf, lon, lat, card, doc)
+        elif recipe in ("water_reach", "dry_ground", "hidden_water", "tracks_flooded", "water_change"):
+            card["reasons"] += _explain_wetland(site_id, recipe, vals, wl_series, wl_dates, qf, lon, lat, card)
         elif recipe in ("burned_slopes", "replant_first", "forest_recovery", "roads_to_watch", "farms_burned", "mud_to_water", "since_last_pass"):
             extra = _explain_wildfire(site_id, recipe, vals, qf, lon, lat, card)  # may replace card["reasons"]
             card["reasons"] = card["reasons"] + extra
@@ -1314,13 +1654,17 @@ def at_point(site_id: str, lon: float, lat: float) -> dict:
 
 
 def nearest_place(site_id: str, lon: float, lat: float) -> dict | None:
-    """The nearest named place to a spot (cached OpenStreetMap places): its name, distance and direction from it."""
+    """The nearest named place to a spot (cached OpenStreetMap places, plus camps and airstrips where the site has them):
+    its name, distance and direction from it."""
     key = f"{site_id}/context/places.geojson"
     if not config.data.exists(key):
         return None
+    feats = json.loads(config.data.read_text(key))["features"]
+    if config.data.exists(f"{site_id}/context/camps.geojson"):
+        feats = feats + json.loads(config.data.read_text(f"{site_id}/context/camps.geojson"))["features"]
     best = None
     k = np.cos(np.radians(lat))
-    for f in json.loads(config.data.read_text(key))["features"]:
+    for f in feats:
         name = f["properties"].get("name")
         if not name or f["geometry"]["type"] != "Point":
             continue
@@ -1427,6 +1771,8 @@ def _explain_wildfire(site_id: str, recipe: str, v: dict, q: dict, lon: float, l
             out.append(f"{it['name']}: {it['burned_ha']:.1f} of its {it['area_ha']:.1f} ha burned ({it['burned_pct']}%).")
         elif card["class"] == 3:
             out.append("A mapped field with little or no burning.")
+        elif card["class"] == 4:
+            out.append("A mapped field, but the burn map does not cover most of it, so whether it burned is not known from the radar.")
         else:
             out.append("No field is mapped here in OpenStreetMap" + (f"; the nearest burned one is {it['name']}, {dist:.0f} m away." if it else "."))
     elif recipe == "mud_to_water":
@@ -1494,9 +1840,12 @@ def _fold(s: str) -> str:
 
 @lru_cache(maxsize=16)
 def _places(site_id: str, mtime: float) -> list:
-    fc = json.loads(config.data.read_text(f"{site_id}/context/places.geojson"))
+    feats = json.loads(config.data.read_text(f"{site_id}/context/places.geojson"))["features"]
+    camps = f"{site_id}/context/camps.geojson"  # camps, lodges and airstrips (wetland sites) are searched too
+    if config.data.exists(camps):
+        feats = feats + json.loads(config.data.read_text(camps))["features"]
     out = []
-    for f in fc["features"]:
+    for f in feats:
         p = f["properties"]
         names = {n for n in (p.get("name"), p.get("name_local")) if n}
         if names and f["geometry"]["type"] == "Point":
@@ -1512,7 +1861,8 @@ def search_places(site_id: str, q: str, limit: int = 8) -> list:
     if not config.data.exists(key) or len(q.strip()) < 2:
         return []
     needle = _fold(q.strip())
-    rank = {"city": 0, "town": 1, "suburb": 2, "village": 3, "quarter": 4, "neighbourhood": 5, "hamlet": 6}
+    rank = {"city": 0, "town": 1, "suburb": 2, "village": 3, "quarter": 4, "neighbourhood": 5, "hamlet": 6, "lodge": 7, "hotel": 7, "camp_site": 7,
+            "aerodrome": 8, "airstrip": 8}
     hits = []
     for p in _places(site_id, config.data.local_path(key).stat().st_mtime):
         best = min((0 if k.startswith(needle) else 1 if needle in k else 9) for k in p["keys"])

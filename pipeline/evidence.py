@@ -23,8 +23,19 @@ Earthquake (from the GUNW pairs, the elevation model and, on a Showcase Site, th
                      coherence-loss Baseline rule
   slope80            terrain slope (degrees), averaged onto this grid
 
+Wetland (from the water Model's per-Pass class maps, pred_wetland_<date>: 0 dry, 1 open water, 2 flooded vegetation),
+on the maps' own grid:
+  water_class_<Pass> each Pass's class map with lone wet pixels set dry (fewer than 5 of the 3 x 3 neighbours wet):
+                     the maps carry salt-and-pepper speckle that would otherwise flood every track it crosses
+  seen_passes        Passes with a class at the spot
+  ow_share           share of those Passes mapped as open water
+  fv_share           share mapped as flooded vegetation (water under reeds and papyrus)
+  wet_days           days under water, open or under vegetation: each wet Pass counts until the next (ADR-0010)
+  dist_wet_m         distance to the nearest spot mapped under water on any Pass (m, capped at 5 km)
+
 Everything here is physics or rules on measured layers; no Model runs (ADR-0001, ADR-0005). The earthquake damage
-class is the one place a Model's own output is read, as a Showcase Site's evidence (its card states the score).
+class and the wetland water maps are the places a Model's own output is read, as a Showcase Site's evidence (its card
+states the score).
 """
 from __future__ import annotations
 
@@ -379,7 +390,9 @@ def wildfire(site_id: str, m: dict, site: dict, log=print) -> dict:
         raise RuntimeError("needs a burn map (pred_wildfire or baseline_wildfire)")
     hv_l = layer(m, "hv_db")
     slope_l = layer(m, "slope")
-    burned = read(site_id, burn_l["id"], burn_l["dates"][-1]) == 1
+    burn_map = read(site_id, burn_l["id"], burn_l["dates"][-1])
+    burned = burn_map == 1
+    known = np.isfinite(burn_map)  # a Model may map only part of the site (the notebook U-Net: land vegetated before the fire)
     slope = read(site_id, "slope", slope_l["dates"][-1])
     g20 = grid_of(config.data.local_path(f"{site_id}/layers/slope_{slope_l['dates'][-1]}.tif"))
     k = max(1, int(round(FLOW_CELL_M / g20["res"])))
@@ -433,7 +446,8 @@ def wildfire(site_id: str, m: dict, site: dict, log=print) -> dict:
         dhh[dark | ~land] = np.nan
     out = {"mud_upstream_ha": upstream, "hv_recovery": rec, "burned_share": burned_share, "steep_burned_share": steep_burned,
            "drainage_ha": drainage, "dem60": dem60.astype(np.float32), "burned_upstream_ha": burned_up, "edge_upstream": edge_up,
-           "dhv60": dhv.astype(np.float32), "dhh60": dhh.astype(np.float32), "burned20": burned}
+           "dhv60": dhv.astype(np.float32), "dhh60": dhh.astype(np.float32), "burned20": burned,
+           "known20": known}
     for name in ("mud_upstream_ha", "hv_recovery", "burned_share", "steep_burned_share", "drainage_ha", "burned_upstream_ha", "edge_upstream", "dhv60", "dhh60"):
         export.write_cog(site_id, f"{name}_{last}", out[name], g60, sub="layers" if name in ("mud_upstream_ha", "hv_recovery") else "evidence")
     f = np.isfinite(rec)
@@ -450,7 +464,8 @@ def wildfire(site_id: str, m: dict, site: dict, log=print) -> dict:
         "burn_layer": burn_l["id"],
         "layers": [entry("mud_upstream_ha", [last], kind="physics", status="prototype"), entry("hv_recovery", [last], kind="physics", status="prototype")],
         "hidden": ["burned_share", "steep_burned_share", "drainage_ha"],
-        "stats": {"burned_steep_ha": round(float(np.nansum(steep_burned) * cell_ha)), "burn_source": burn_l["id"]},
+        "stats": {"burned_steep_ha": round(float(np.nansum(steep_burned) * cell_ha)), "burn_source": burn_l["id"],
+                  "burn_unmapped_share": round(float(1 - known.mean()), 3)},
     }
 
 
@@ -544,4 +559,85 @@ def earthquake(site_id: str, m: dict, site: dict, log=print) -> dict:
         "hidden": ["post_coherence", "damage_class", "slope80"],
         "stats": {"damage_source": source, "co_event_date": co, "post_passes": len(post),
                   "strain_p99_cm_km": round(float(sp[1]), 1) if fs.any() else None},
+    }
+
+
+# ---------------------------------------------------------------- wetland
+
+WL_OPEN, WL_VEG = 1, 2   # class values in the water Model's maps (checked against its card in `wetland`)
+WL_MAX_DIST_M = 5000.0
+WL_MIN_NEIGHBOURS = 5    # a wet pixel is kept when at least 5 of its 3 x 3 block (itself included) are wet (team choice)
+
+
+def drop_lone_wet(classes: np.ndarray, min_neighbours: int = WL_MIN_NEIGHBOURS) -> np.ndarray:
+    """A copy of one Pass's class map with isolated wet pixels (open or under vegetation) set dry."""
+    from scipy import ndimage
+
+    out = classes.copy()
+    wet = ((classes == WL_OPEN) | (classes == WL_VEG)).astype(np.float32)
+    n = ndimage.uniform_filter(wet, size=3, mode="constant") * 9
+    out[(wet > 0) & (n < min_neighbours - 0.01)] = 0
+    return out
+
+
+def wetland(site_id: str, m: dict, log=print) -> dict:
+    """Season evidence from the installed water Model's per-Pass class maps (pred_wetland_<date>)."""
+    from scipy import ndimage
+
+    from .predictions import card, flood_season
+
+    pred_l = layer(m, "pred_wetland")
+    if not pred_l or pred_l["kind"] != "prediction" or len(pred_l["dates"]) < 2:
+        raise RuntimeError("needs the water Model's class maps (pred_wetland) on 2 or more Passes; install an export with ml/check_export.py")
+    c = card(m.get("model_card") or "wetland") or {}
+    labels = {o["label"]: o["value"] for o in c.get("outputs", [])}
+    if labels.get("Open water") != WL_OPEN or labels.get("Flooded vegetation", WL_VEG) != WL_VEG:
+        raise RuntimeError(f"the wetland card's classes are {labels}; the questions expect 1 open water and 2 flooded vegetation")
+    dates = pred_l["dates"]
+    grid = grid_of(config.data.local_path(f"{site_id}/layers/pred_wetland_{dates[0]}.tif"))
+    stack = []
+    for d in dates:
+        with rasterio.open(config.data.local_path(f"{site_id}/layers/pred_wetland_{d}.tif")) as r:
+            stack.append(r.read(1))
+    raw = np.stack(stack)                         # (Passes, H, W) uint8, 255 = no data
+    stack = np.stack([drop_lone_wet(a) for a in raw])
+    for d, a in zip(dates, stack):
+        export.write_cog(site_id, f"water_class_{d}", a, grid, categorical=True, sub="evidence")
+    wet_raw = ((raw == WL_OPEN) | (raw == WL_VEG)).sum()
+    dropped = 1 - float(((stack == WL_OPEN) | (stack == WL_VEG)).sum()) / max(int(wet_raw), 1)
+    valid = stack != 255
+    seen = valid.sum(0).astype(np.float32)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ow = ((stack == WL_OPEN).sum(0) / seen).astype(np.float32)
+        fv = ((stack == WL_VEG).sum(0) / seen).astype(np.float32)
+    ow[seen == 0] = np.nan
+    fv[seen == 0] = np.nan
+    any_wet = flood_season(list(stack), dates, [WL_OPEN, WL_VEG])
+    days = np.nan_to_num(any_wet["hydroperiod"], nan=0.0).astype(np.float32)
+    days[seen == 0] = np.nan
+    ever = days > 0
+    dist = (ndimage.distance_transform_edt(~ever) * grid["res"]).astype(np.float32) if ever.any() else np.full(grid["shape"], WL_MAX_DIST_M, np.float32)
+    dist = np.minimum(dist, WL_MAX_DIST_M)
+    dist[seen == 0] = np.nan
+
+    last = dates[-1]
+    out = {"seen_passes": seen, "ow_share": ow, "fv_share": fv, "wet_days": days, "dist_wet_m": dist}
+    for name, arr in out.items():
+        export.write_cog(site_id, f"{name}_{last}", arr, grid, sub="evidence")
+    cell_km2 = grid["res"] ** 2 / 1e6
+    ow_km2 = [round(float((s == WL_OPEN).sum()) * cell_km2, 1) for s in stack]
+    fv_km2 = [round(float((s == WL_VEG).sum()) * cell_km2, 1) for s in stack]
+    coll = {p["date"]: p.get("collection") for p in m.get("passes", [])}
+    log(f"  evidence: {len(dates)} water maps {dates[0]} to {last}, {100 * dropped:.0f}% of wet pixels dropped as lone; open water {min(ow_km2):,.0f}-{max(ow_km2):,.0f} km2, "
+        f"under vegetation {min(fv_km2):,.0f}-{max(fv_km2):,.0f} km2")
+    return {
+        "date": last,
+        "grid": grid,
+        "stack": stack,
+        "dates": dates,
+        "layers": [],
+        "hidden": list(out),
+        "stats": {"pass_dates": dates, "open_water_km2": ow_km2, "flooded_veg_km2": fv_km2,
+                  "collections": [coll.get(d) for d in dates], "model": c.get("model", {}).get("name"),
+                  "lone_wet_dropped_share": round(dropped, 3)},
     }

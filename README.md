@@ -137,12 +137,12 @@ code (`--all`).
 | Mexico City | What can I build here? | Same | Standard buildings fit 29% of the measured ground | prototype |
 | Mexico City | Are there better plots nearby? | Same, around a clicked spot | Up to 3 steadier spots within 2 km | prototype |
 | Mexico City | Which Metro, rail and canal segments cross uneven sinking? | Speed along OpenStreetMap lines, per 250 m | 37 km reach 1/500 within 15 years (Metro Lines A, 5 and 12 among the worst) | prototype |
-| Jijel | Which burned slopes could send mud onto villages this winter? | Burn map, slope >= 23 degrees, flow paths on Copernicus DEM (priority-flood), OSM villages | 12 villages beside a main mud path, 18 beside a smaller one | prototype |
-| Jijel | Which roads should be watched or closed in heavy rain? | Same, along OSM roads | 104 sections to close, 179 to watch | prototype |
-| Jijel | Where should replanting start? | Steepness, drains to people, HV recovery | 24,240 ha first | prototype |
+| Jijel | Which burned slopes could send mud onto villages this winter? | Burn map, slope >= 23 degrees, flow paths on Copernicus DEM (priority-flood), OSM villages | 14 villages beside a main mud path, 23 beside a smaller one | prototype |
+| Jijel | Which roads should be watched or closed in heavy rain? | Same, along OSM roads | 115 sections to close, 187 to watch | prototype |
+| Jijel | Where should replanting start? | Steepness, drains to people, HV recovery | 25,693 ha first | prototype |
 | Jijel | Is the forest coming back? | HV recovery since the post-fire Passes | Mostly not yet, two months after the fire | prototype |
-| Jijel | Which farms lost their cover? | Burn map (20 m) x OSM fields and orchards | 113 fields mostly burned, 6 partly; 119 ha of the 4,508 ha mapped | prototype |
-| Jijel | Is mud heading to the rivers and the dams? | Burned and burned-steep ground upstream (flow routing), OSM reservoirs and rivers | 6 of 26 reservoirs and river mouths have 10%+ of their catchment burned and steep; El Agrem worst among dams | prototype |
+| Jijel | Which farms lost their cover? | Burn map (20 m) x OSM fields and orchards | 118 fields mostly burned, 9 partly; 163 ha of the 4,508 ha mapped; 157 not mapped by the burn map | prototype |
+| Jijel | Is mud heading to the rivers and the dams? | Burned and burned-steep ground upstream (flow routing), OSM reservoirs and rivers | 7 of 26 reservoirs and river mouths have 10%+ of their catchment burned and steep; Tabellout gets the most burned steep ground | prototype |
 | Jijel | What changed since the last Pass? | HV and HH change between the last two Passes, 60 m blocks, 3 dB | 58 ha lost vegetation signal, 87 ha darker; 29 patches near villages or roads | prototype |
 
 Team choices, stated as choices: speed limits of 5 and 20 cm/year; tilt from speed smoothed over 400 m and not used
@@ -169,7 +169,7 @@ did not train on (spatial blocks, or held-out Passes for the forecast). Build a 
 
 | Lens | Model | Labels | Score (Model vs Baseline) | Status |
 |---|---|---|---|---|
-| Wildfire | ChangeUTAE (U-Net + temporal attention) | Sentinel-2 burn index (proxy) | burned IoU 0.86 vs 0.21 (Algeria); 0.36 vs 0.18 on Washington, not retrained | prototype |
+| Wildfire | U-Net on pre/post-fire HH/HV composites (notebook `jijel-wildfire-full-site`, installed 2026-11-15; replaces ChangeUTAE 0.86) | Sentinel-2 burn index (proxy) | burned IoU 0.92 vs 0.33 (HV-drop rule) and 0.56 (trees), Algeria test blocks; not run on Washington | prototype |
 | Earthquake | Ensemble LightGBM + U-Net on a GRU coherence anomaly (notebook export) | Copernicus EMS EMSR884 (real) | average precision 0.73 vs 0.61 (chance 0.13) | prototype |
 | Farming | LightGBM on the Pass series | USDA CDL 2024+2025 rotation rule (proxy; CDL 2026 not out) | macro F1 0.86 vs 0.53 | prototype |
 | Wetland | LightGBM open water + physics-guided flooded vegetation + HMM (notebook export v3) | Sentinel-2 MNDWI open water (proxy); flooded vegetation from physics, marked not reliable | open-water IoU 0.21 vs 0.013 on held-out 5 km blocks at true prevalence (balanced-sample scores were higher for every method, so this is the honest number) | prototype |
