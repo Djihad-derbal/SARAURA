@@ -4,6 +4,28 @@ An open-source web app that turns NISAR radar data into maps, 3D views, time
 series and reports for surface change anywhere on Earth. Built for the NASA
 Space Apps Challenge 2026, "Dancing with the SARs".
 
+| | |
+|---|---|
+| Challenge | [Dancing with the SARs](https://www.spaceappschallenge.org/2026/challenges/dancing-with-the-sars/), NASA Space Apps 2026 |
+| 30-second demo | [demo/saraura_demo_30s.mp4](demo/saraura_demo_30s.mp4) |
+| Submission text (summary, description, data, references) | [SUBMISSION.md](SUBMISSION.md) |
+| License | [MIT](LICENSE) |
+
+![SARAURA demo poster](demo/poster.jpg)
+
+**In one paragraph.** SARAURA reads NASA-ISRO NISAR radar straight from NASA Earthdata. It measures ground
+sinking, burned forest and flooding through cloud and smoke, every 12 days, and turns those measurements into plain
+answers: "Is it safe to build here?", "Which burned slopes could send mud onto villages?", "Where did the flood reach
+this season?". Each answer comes with its reason, costed and cited options, and what to check on the ground. The worked
+places are Mexico City (subsidence), Jijel in Algeria (wildfire), Washington State (the same fire questions, no new
+code) and the Okavango Delta (flood). A research explorer runs an Analysis on any area on Earth.
+
+**Use of Super Intelligence (SI) tools.** The code and documentation were written with help from Claude Code
+(Anthropic). Commits it contributed to carry a `Co-Authored-By: Claude` line in their git metadata. The optional
+in-app Assistant calls Google Gemini and is badged "prototype". The AI Models in `ml/` were trained on NISAR data and
+are scored against simple Baselines on their cards. No SI-generated images, video or audio are used; the demo is a
+screen recording of the real app. Details are in [SUBMISSION.md](SUBMISSION.md#6-use-of-super-intelligence-si).
+
 Start with [PRODUCT.md](PRODUCT.md): what the product is for, how it answers questions at each place, how each
 application scales, and how to set up on a new machine. Then [CONTEXT.md](CONTEXT.md) for the data facts. The build plan is [PLAN.md](PLAN.md), terms are in
 [GLOSSARY.md](GLOSSARY.md), decisions are in [docs/adr/](docs/adr/), and the AI pieces are in

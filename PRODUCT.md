@@ -9,7 +9,7 @@ The other documents go deeper:
 - [docs/adr/](docs/adr/): the reasons behind big decisions.
 - [README.md](README.md): setup and commands.
 
-Last updated: 2026-11-15 (Space Apps 2026 runs 14–15 Nov 2026). The code described here is on the branch `phase-4b-questions-and-story`. It reaches `main` once PR #1 is merged.
+Last updated: 2026-11-15 (Space Apps 2026 runs 14–15 Nov 2026). The code described here is on `main` in the public repository (https://github.com/Djihad-derbal/SARAURA).
 
 ---
 
