@@ -1,5 +1,6 @@
 id: a4_forest_recovery
 title: "Is the forest coming back?"
+topic: "Forest coming back"
 short: "How much of the vegetation signal lost in the fire has returned since."
 lens: wildfire
 recipe: forest_recovery

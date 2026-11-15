@@ -1,0 +1,37 @@
+id: e4_lifelines_crossed
+title: "Which roads and lifelines crossed moving ground?"
+topic: "Roads and lifelines"
+short: "Road, Metro and canal sections laid across ground the earthquake bent or tore, or that keeps moving, ranked."
+lens: earthquake
+recipe: lifelines_crossed
+order: 4
+evidence: [strain_cm_km, post_vel_cm_month, osm_roads, osm_lines]
+context: [roads, lines]
+thresholds:
+  amber_cm_km: 5
+  red_cm_km: 10
+  amber_cm_month: 1
+  red_cm_month: 3
+  segment_m: 500
+classes:
+  - value: 1
+    label: "Check this section"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "The section crosses ground the earthquake bent, or that still creeps."
+    solutions: [inspect_section, check_each_pass]
+  - value: 2
+    label: "Inspect before full use"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "The section crosses ground that was torn or strongly bent, or that keeps moving 3 cm a month or more: buried pipes, tunnels and pavement there are the likeliest to be broken."
+    solutions: [inspect_section, flexible_pipe_joints]
+sources:
+  - "American Lifelines Alliance (2005). Seismic Guidelines for Water Pipelines (ground strain and fault crossing)"
+  - "O'Rourke, M. J. and Liu, X. (1999). Response of Buried Pipelines Subject to Earthquake Effects. MCEER Monograph 3"
+  - "Roads, Metro and canals from OpenStreetMap contributors, ODbL"
+limits:
+  - "Pipes and cables are not mapped: roads often carry them, so a flagged road section also flags what lies under it."
+  - "Bridges, tunnels and their design are not known."
+features: lines
+status: prototype

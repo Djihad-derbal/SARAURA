@@ -1,5 +1,6 @@
 id: m4_lines_at_risk
 title: "Which Metro, rail and canal segments cross uneven sinking?"
+topic: "Metro, rail and canals"
 short: "Each 250 m of line, ranked by years until uneven sinking along it reaches the limit."
 lens: subsidence
 recipe: lines_at_risk

@@ -113,3 +113,16 @@ def test_old_quick_view_has_no_model_option():
 
     assert "method" not in AnalysisRequest.model_fields
     assert not hasattr(jobs, "classify_model")
+
+
+def test_showcase_requests_keep_contacts_private(tmp_path, monkeypatch):
+    from saraura import config
+    from saraura.storage import LocalStorage
+
+    monkeypatch.setattr(config, "data", LocalStorage(tmp_path))
+    r = client.post("/showcase-requests", json={"name": "Bejaia hills", "lon": 5.05, "lat": 36.75, "lens": "wildfire",
+                                                "role": "civil_protection", "why": "Winter road closures", "contact": "me@example.org"})
+    assert r.status_code == 200 and r.json()["status"] == "requested" and "contact" not in r.json()
+    listed = client.get("/showcase-requests").json()
+    assert [x["name"] for x in listed] == ["Bejaia hills"] and "contact" not in listed[0]
+    assert client.post("/showcase-requests", json={"name": "x", "lon": 500, "lat": 0, "lens": "wildfire"}).status_code == 422

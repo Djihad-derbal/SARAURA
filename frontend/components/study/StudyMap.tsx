@@ -94,6 +94,7 @@ export default function StudyMap({ studyId, bbox, layerId, date, opacity, compar
   const [ready, setReady] = useState(false);
   const [cmpReady, setCmpReady] = useState(false);
   const [split, setSplit] = useState(50);
+  const [drawnKey, setDrawnKey] = useState<string | null>(null); // which layer/date has finished drawing
   const bubble = useRef<Popup | null>(null);
   const [bubbleEl, setBubbleEl] = useState<HTMLDivElement | null>(null);
   const pickRef = useRef(onPick);
@@ -164,7 +165,10 @@ export default function StudyMap({ studyId, bbox, layerId, date, opacity, compar
     const src = m.getSource("study") as RasterTileSource | undefined;
     if (!src) addOverlay(m, url, opacity, bbox);
     else src.setTiles([url]);
+    const key = url;
+    m.once("idle", () => setDrawnKey(key)); // the map is idle once these tiles have drawn
   }, [ready, studyId, layerId, date, bbox, opacity]);
+  const drawing = !ready || drawnKey !== layerTileUrl(studyId, layerId, date);
 
   // Vector answers (lines and points) and whether the raster stays visible under them.
   useEffect(() => {
@@ -290,6 +294,12 @@ export default function StudyMap({ studyId, bbox, layerId, date, opacity, compar
   return (
     <div className="relative h-full w-full">
       <div ref={mainEl} className="h-full w-full" />
+      {drawing && (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-xl border border-line bg-bg/85 px-4 py-3 text-center backdrop-blur" role="status">
+          <div className="busy-bar h-0.5 w-40" />
+          <p className="mt-2 text-xs text-ink-2">Drawing the answer map…</p>
+        </div>
+      )}
       {bubbleEl && popup && createPortal(popup, bubbleEl)}
       {compareDate && (
         <>

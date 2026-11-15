@@ -1,5 +1,6 @@
 id: a3_replant_first
 title: "Where should replanting start?"
+topic: "Where to replant"
 short: "Burned patches ranked by steepness, what lies downhill, and whether the forest is already coming back."
 lens: wildfire
 recipe: replant_first

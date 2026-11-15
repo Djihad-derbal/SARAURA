@@ -28,6 +28,10 @@ def answers(study_id: str, role: str | None = Query(None, pattern=r"^[a-z_]+$"))
     """Every Question for this study: headline, classes with area, ranked list, solutions, sources and limits.
     With `role`, only that role's Questions, in its order."""
     doc = _doc(study_id)
+    from pipeline import answers as engine
+
+    topics = {q["id"]: q.get("topic") for q in engine.questions(doc.get("lens"))}  # read live from questions/*.yaml
+    doc = {**doc, "questions": [{**q, "topic": topics.get(q["id"])} for q in doc["questions"]]}
     if role:
         r = next((x for x in doc["roles"] if x["id"] == role), None)
         if r is None:

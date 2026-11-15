@@ -145,7 +145,7 @@ def test_answers_api():
     assert c.get(f"/answers/{site}/at", params={"lon": (w + e) / 2, "lat": (s + n) / 2}).status_code == 200
     assert c.get(f"/answers/{site}/at", params={"lon": w - 1, "lat": s - 1}).status_code == 422
     assert c.get(f"/answers/{site}", params={"role": "nobody"}).status_code == 404
-    assert c.get("/answers/venezuela_eq").status_code == 404
+    assert c.get("/answers/okavango_wetland").status_code == 404  # no Questions for the wetland Lens yet
 
 
 @pytest.mark.skipif(not BUILT, reason="no answers built")

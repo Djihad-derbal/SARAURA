@@ -1,21 +1,24 @@
 {
   "lens": "wetland",
   "name": "wetland",
-  "job": "Map open water on every NISAR Pass across the delta, through cloud and day or night",
+  "job": "Map open water and water hidden under reeds and papyrus (flooded vegetation) on every NISAR Pass across the delta, through cloud, day or night",
   "user": "Wetland managers and water authorities tracking the yearly flood pulse",
   "sites": [
     "okavango_wetland"
   ],
   "inputs": [
-    "hh_db",
-    "hv_db",
-    "hvhh_db",
-    "dhh",
-    "dhv",
-    "hh_season_mean",
-    "hh_season_min",
-    "hv_season_mean",
-    "hv_season_min"
+    "hh",
+    "hv",
+    "hh_hv",
+    "hh_rise",
+    "hv_rise",
+    "hh_tex",
+    "coh",
+    "hh_min",
+    "hh_max",
+    "hv_min",
+    "hv_mean",
+    "hh_mean"
   ],
   "outputs": [
     {
@@ -27,62 +30,104 @@
       "value": 1,
       "label": "Open water",
       "reliable": true
+    },
+    {
+      "value": 2,
+      "label": "Flooded vegetation",
+      "reliable": false
     }
   ],
   "labels": {
     "kind": "proxy",
-    "source": "Sentinel-2 water index (MNDWI > 0) within 4 days of the Passes 2026-07-08, 2026-09-06, 2026-10-24",
-    "notes": "Optical labels miss water under vegetation and count it as dry land"
+    "source": "Sentinel-2 MNDWI open water within 4 days of Passes 2026-06-26, 2026-09-06, 2026-11-05 (open-water training AND scoring); flooded vegetation from physics-agreement pseudo-labels",
+    "notes": "Optical labels cannot see water under vegetation; the flooded-vegetation class is supported by double-bounce physics, seasonal HH rise, coherence and model agreement, not by independent labels"
   },
   "baseline": {
     "name": "Otsu threshold on HH, per Pass",
-    "metric": "open-water IoU",
-    "score": 0.4667
+    "metric": "open-water IoU, held-out 5 km blocks, true prevalence (Sentinel-2 MNDWI)",
+    "score": 0.0131
   },
   "model": {
-    "name": "LightGBM on per-Pass backscatter and season statistics",
-    "metric": "open-water IoU",
-    "score": 0.6328,
-    "framework": "LightGBM"
+    "name": "LightGBM open water + physics-guided flooded vegetation + HMM",
+    "metric": "open-water IoU, held-out 5 km blocks, true prevalence (Sentinel-2 MNDWI)",
+    "score": 0.2137,
+    "framework": "LightGBM + NumPy HMM"
   },
   "extra_scores": [
     {
-      "name": "Model on 2026-07-08",
-      "metric": "open-water IoU",
-      "score": 0.538
+      "name": "NISAR-ATBD rules",
+      "metric": "open-water IoU, held-out 5 km blocks, true prevalence (Sentinel-2 MNDWI)",
+      "score": 0.0493
     },
     {
-      "name": "Baseline on 2026-07-08",
-      "metric": "open-water IoU",
-      "score": 0.4155
+      "name": "GMM + HMM",
+      "metric": "open-water IoU, held-out 5 km blocks, true prevalence (Sentinel-2 MNDWI)",
+      "score": 0.021
     },
     {
-      "name": "Model on 2026-09-06",
-      "metric": "open-water IoU",
-      "score": 0.7287
+      "name": "Baseline: Otsu on HH",
+      "metric": "open-water IoU, balanced samples (block CV)",
+      "score": 0.4874
     },
     {
-      "name": "Baseline on 2026-09-06",
-      "metric": "open-water IoU",
-      "score": 0.6526
+      "name": "NISAR-ATBD rules",
+      "metric": "open-water IoU, balanced samples (block CV)",
+      "score": 0.4053
     },
     {
-      "name": "Model on 2026-10-24",
-      "metric": "open-water IoU",
-      "score": 0.5131
+      "name": "GMM + HMM",
+      "metric": "open-water IoU, balanced samples (block CV)",
+      "score": 0.5715
     },
     {
-      "name": "Baseline on 2026-10-24",
-      "metric": "open-water IoU",
-      "score": 0.2491
+      "name": "LightGBM (threshold 0.5, untuned)",
+      "metric": "open-water IoU, balanced samples (block CV)",
+      "score": 0.716
+    },
+    {
+      "name": "LightGBM (S2 labels, tuned threshold)",
+      "metric": "open-water IoU, balanced samples (block CV)",
+      "score": 0.3592
+    },
+    {
+      "name": "Baseline: Otsu on HH, predicted open-water share",
+      "metric": "share of pixels (Sentinel-2: 0.0062)",
+      "score": 0.436
+    },
+    {
+      "name": "NISAR-ATBD rules, predicted open-water share",
+      "metric": "share of pixels (Sentinel-2: 0.0062)",
+      "score": 0.0509
+    },
+    {
+      "name": "GMM + HMM, predicted open-water share",
+      "metric": "share of pixels (Sentinel-2: 0.0062)",
+      "score": 0.2533
+    },
+    {
+      "name": "LightGBM (threshold 0.5, untuned), predicted open-water share",
+      "metric": "share of pixels (Sentinel-2: 0.0062)",
+      "score": 0.0691
+    },
+    {
+      "name": "LightGBM (S2 labels, tuned threshold), predicted open-water share",
+      "metric": "share of pixels (Sentinel-2: 0.0062)",
+      "score": 0.0068
+    },
+    {
+      "name": "Flooded-vegetation LightGBM, agreement with held-out physics seeds",
+      "metric": "agreement",
+      "score": 1.0
     }
   ],
-  "split": "Spatial 5-fold cross-validation over 5 km blocks, label dates pooled; water and land sampled about equally",
+  "split": "Open water: spatial 5-fold CV over 5 km blocks; Model and Baseline scored on the same held-out random pixels at true prevalence; the LightGBM decision threshold for each fold is chosen on the other folds only. Model selected on this same score.",
   "limits": [
-    "Open water only: water under reeds and papyrus (flooded vegetation) is not learned, because optical labels cannot see it",
-    "Wind-roughened water is bright and can be missed",
-    "Scores use balanced samples; on the whole delta, where water is rarer, IoU is lower"
+    "Flooded vegetation is not validated against independent labels (none exist under canopy); treat it as physics-supported",
+    "Wind-roughened open water is bright and can be missed; very dense wet canopy can suppress double bounce",
+    "Dual-pol (HH/HV) only: no VV, no full polarimetric decomposition",
+    "Fixed thresholds seed the models and come from Amazon/UAVSAR studies; papyrus and reed may differ (the GMM and HMM adapt them)",
+    "PROVISIONAL GCOV calibration may shift; re-run when VALIDATED products exist"
   ],
   "status": "prototype",
-  "updated": "2026-11-13"
+  "updated": "2026-11-15"
 }

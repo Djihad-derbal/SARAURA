@@ -1,5 +1,6 @@
 id: m1_safe_to_build
 title: "Is it safe to build here?"
+topic: "Safe to build"
 short: "A traffic light for any plot, from how fast and how unevenly the ground sinks."
 lens: subsidence
 recipe: safe_to_build

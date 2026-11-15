@@ -1,19 +1,23 @@
 {
   "lens": "subsidence",
   "name": "subsidence",
-  "job": "Forecast how far each spot will have sunk at the next NISAR Pass",
+  "job": "Forecast how far each spot will have sunk at the next NISAR Pass, with an uncertainty, and flag statistically significant accelerating ground",
   "user": "City water and infrastructure planners watching where the ground sinks fastest",
   "sites": [
     "mexico_city_subsidence"
   ],
   "inputs": [
-    "trend_last6_minus_line",
-    "trend_last9_minus_line",
-    "trend_last12_minus_line",
-    "last3_off_line",
-    "last_off_line",
-    "horizon_days",
-    "coherence_mean"
+    "v4",
+    "v8",
+    "v12",
+    "v_all",
+    "off_line",
+    "curv",
+    "kf_v",
+    "kf_off",
+    "nbr_v",
+    "coh",
+    "horizon_days"
   ],
   "prediction": {
     "unit": "cm",
@@ -26,65 +30,85 @@
   },
   "labels": {
     "kind": "self_supervised",
-    "source": "The site's own GUNW time series; Passes 2026-09-19, 2026-10-01, 2026-10-13 held out",
-    "notes": "Scores measure how well the next Passes are forecast, not ground truth from levelling or GNSS"
+    "source": "The site's own NISAR GUNW NSBAS series; Passes 2026-10-01, 2026-10-01, 2026-10-13 held out",
+    "notes": "Scores measure forecasts of the next Passes, not levelling or GNSS truth; the atmosphere of a future Pass is an irreducible error floor"
   },
   "baseline": {
     "name": "Straight-line extrapolation of each pixel's history",
     "metric": "RMSE, cm (3 held-out Passes)",
-    "score": 1.088
+    "score": 0.6258
   },
   "model": {
-    "name": "LightGBM correction of the straight line",
+    "name": "LightGBM quantile (selected on a validation origin)",
     "metric": "RMSE, cm (3 held-out Passes)",
-    "score": 1.203,
-    "framework": "LightGBM"
+    "score": 0.6766,
+    "framework": "NumPy Kalman / LightGBM / PyTorch"
   },
   "extra_scores": [
     {
-      "name": "Model, +1 Pass, fastest-sinking 10%",
-      "metric": "RMSE, cm",
-      "score": 1.304
+      "name": "Persistence",
+      "metric": "RMSE, cm (test)",
+      "score": 1.1198
     },
     {
-      "name": "Baseline, +1 Pass, fastest-sinking 10%",
-      "metric": "RMSE, cm",
-      "score": 1.041
+      "name": "Straight line (all history) [Baseline]",
+      "metric": "RMSE, cm (test)",
+      "score": 0.6258
     },
     {
-      "name": "Model, +2 Pass, fastest-sinking 10%",
-      "metric": "RMSE, cm",
-      "score": 1.596
+      "name": "Straight line (last 8)",
+      "metric": "RMSE, cm (test)",
+      "score": 1.0007
     },
     {
-      "name": "Baseline, +2 Pass, fastest-sinking 10%",
-      "metric": "RMSE, cm",
-      "score": 1.325
+      "name": "Quadratic",
+      "metric": "RMSE, cm (test)",
+      "score": 0.6724
     },
     {
-      "name": "Model, +3 Pass, fastest-sinking 10%",
-      "metric": "RMSE, cm",
-      "score": 1.067
+      "name": "Kalman filter (local linear trend)",
+      "metric": "RMSE, cm (test)",
+      "score": 0.6094
     },
     {
-      "name": "Baseline, +3 Pass, fastest-sinking 10%",
-      "metric": "RMSE, cm",
-      "score": 1.025
+      "name": "Transformer quantile",
+      "metric": "RMSE, cm (test)",
+      "score": 0.6749
     },
     {
-      "name": "No change (last value)",
-      "metric": "RMSE, cm (+1 Pass)",
-      "score": 0.789
+      "name": "Ensemble (Kalman + learned)",
+      "metric": "RMSE, cm (test)",
+      "score": 0.6152
+    },
+    {
+      "name": "LightGBM quantile, 80 % interval coverage",
+      "metric": "coverage",
+      "score": 0.512
+    },
+    {
+      "name": "LightGBM quantile, fastest-sinking 10 %",
+      "metric": "RMSE, cm",
+      "score": 0.7212
+    },
+    {
+      "name": "Diebold-Mariano p-value vs Baseline",
+      "metric": "p",
+      "score": 1.1717492386605941e-05
+    },
+    {
+      "name": "Atmospheric noise floor (median APS σ)",
+      "metric": "cm",
+      "score": 0.879
     }
   ],
-  "split": "Time split: trained on forecasts ending by 2026-09-07, tested on the next 3 Passes; validation origin 2026-07-21 (Model 0.767 cm, Baseline 0.751 cm)",
+  "split": "Time split: test = last 3 Passes (origin 2026-09-19); model chosen on validation origin 2026-09-07; learned models trained on rolling origins with targets before each origin",
   "limits": [
-    "Does not beat the straight-line Baseline: use the Baseline forecast; the Model is shown for transparency",
-    "Under one year of data, so seasonal swings (groundwater pumping, rain) cannot be learned",
-    "Errors include the atmospheric noise of each interferogram, which no forecast can predict",
-    "Line-of-sight displacement only; vertical sinking is assumed to dominate in Mexico City",
-    "The displacement sign (toward or away from the satellite) is our reading of the product; ASF has not yet confirmed it"
+    "Does not significantly beat the straight-line Baseline: use the Baseline; the Model is shown for transparency",
+    "About one year of NISAR data: seasonal terms are only marginally resolved",
+    "Line-of-sight displacement; vertical motion assumed when converting with the incidence angle",
+    "Forecasts cannot anticipate changes in pumping policy or recharge",
+    "PROVISIONAL products; the LOS sign is the ISCE convention, checked here against the sinking lake-bed"
   ],
   "status": "prototype",
-  "updated": "2026-11-13"
+  "updated": "2026-11-15"
 }

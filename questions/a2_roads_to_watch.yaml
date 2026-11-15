@@ -1,5 +1,6 @@
 id: a2_roads_to_watch
 title: "Which roads should be watched or closed in heavy rain?"
+topic: "Roads in heavy rain"
 short: "Road sections that cross a mud path below the burned slopes, ranked."
 lens: wildfire
 recipe: roads_to_watch

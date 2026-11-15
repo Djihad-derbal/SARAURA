@@ -1,4 +1,18 @@
-export const API = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+/** Base URL of the SARAURA API.
+ *  - NEXT_PUBLIC_API_URL set to a full URL: used as is.
+ *  - Opened on this machine (localhost / 127.0.0.1): the API directly on port 8000, as in development.
+ *  - Opened from any other address (a public tunnel, another laptop): "/api" on that same address, which
+ *    next.config.ts forwards to the API, so one public link serves both the website and the API. */
+function resolveApi(): string {
+  const env = (process.env.NEXT_PUBLIC_API_URL ?? "").trim();
+  if (env && !env.startsWith("/")) return env;
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (env || (host !== "localhost" && host !== "127.0.0.1")) return window.location.origin + (env || "/api");
+  }
+  return "http://127.0.0.1:8000";
+}
+export const API = resolveApi();
 
 export type Bbox = [number, number, number, number];
 
@@ -131,6 +145,12 @@ export type GeoPolygon = { type: "Polygon"; coordinates: [number, number][][] };
 
 export const fetchSites = (signal?: AbortSignal) => getJson<SiteSummary[]>("/sites", signal);
 
+/** A request for a new Showcase Site at a point (api/showcase_requests.py). Stored for the team; nothing is sent. */
+export type ShowcaseRequestBody = { name: string; lon: number; lat: number; lens: Lens | "other"; role: string | null; why: string; contact: string };
+export type RequestedPlace = { id: string; name: string; lon: number; lat: number; lens: Lens | "other"; role: string | null; why: string; status: string; created: string };
+export const postShowcaseRequest = (body: ShowcaseRequestBody) => postJson<RequestedPlace>("/showcase-requests", body);
+export const fetchShowcaseRequests = (signal?: AbortSignal) => getJson<RequestedPlace[]>("/showcase-requests", signal);
+
 // ---------------------------------------------------------------- Questions and answers (ADR-0008)
 
 export type Verdict = "good" | "caution" | "bad" | "unknown";
@@ -141,6 +161,8 @@ export type RankedRow = Record<string, string | number> & { lon: number; lat: nu
 export type Question = {
   id: string;
   title: string;
+  /** A two-to-four word name for lists and map bubbles (questions/*.yaml). */
+  topic?: string | null;
   short: string;
   order: number;
   status: Status;
@@ -168,9 +190,13 @@ export type Answers = {
   attribution: string;
 };
 export type Alternative = { lon: number; lat: number; distance_m: number; direction: string; sinking_cm_yr: number; years_500: number; label: string };
+/** The number behind an answer, with the Question's thresholds as marks (worse: which direction is worse). */
+export type Measure = { label: string; value: number; unit: string; max: number; worse: "higher" | "lower"; marks: { at: number; label: string }[] };
 export type AnswerCard = {
   question: string;
   title: string;
+  topic?: string | null;
+  measure?: Measure;
   class: number | null;
   label: string | null;
   verdict: Verdict | null;
@@ -179,7 +205,8 @@ export type AnswerCard = {
   solutions: string[];
   alternatives?: Alternative[];
 };
-export type AnswersAt = { lon: number; lat: number; date: string; cards: AnswerCard[]; values: Record<string, number | null> };
+export type NearPlace = { name: string; local: string; kind: string; km: number; direction: string };
+export type AnswersAt = { lon: number; lat: number; date: string; place?: NearPlace | null; cards: AnswerCard[]; values: Record<string, number | null> };
 
 export const fetchAnswers = (id: string, signal?: AbortSignal) => getJson<Answers>(`/answers/${id}`, signal);
 export type Place = { name: string; local: string; kind: string; lon: number; lat: number };
@@ -388,6 +415,13 @@ export type Agreement = {
   overlap_share: number | null;
 };
 
+export type ClassArea = {
+  layer: string; label: string; kind: string; status: string;
+  classes: { value: number; label: string; color: string }[];
+  rows: { date: string; analysed_ha: number; area_ha: Record<string, number> }[];
+};
+
+export const fetchClassArea = (id: string, signal?: AbortSignal) => getJson<ClassArea>(`/research/${id}/class_area`, signal);
 export const fetchSeriesByClass = (id: string, variable: string, layer: string, date: string, signal?: AbortSignal) =>
   getJson<SeriesByClass>(`/research/${id}/series_by_class?variable=${variable}&layer=${layer}&date=${date}`, signal);
 export const fetchChangeByDate = (id: string, layer = "dhv", threshold = 3, signal?: AbortSignal) =>

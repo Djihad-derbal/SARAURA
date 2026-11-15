@@ -1,27 +1,24 @@
 {
   "lens": "earthquake",
   "name": "earthquake",
-  "job": "Rank 250 m Neighborhoods by the chance that buildings were damaged, from NISAR coherence, displacement and backscatter change",
+  "job": "Rank 250 m Neighbourhoods by the chance that buildings were damaged, from a NISAR coherence time series (self-supervised GRU anomaly), coherence loss and statistically normalised backscatter change",
   "user": "Search-and-rescue and damage-assessment teams deciding where to look first",
   "sites": [
     "venezuela_eq"
   ],
   "inputs": [
-    "coherence_pre",
+    "coherence_pre_mean",
+    "coherence_pre_last",
     "coherence_co",
-    "coherence_post",
     "coherence_co_min",
+    "coherence_post",
     "coherence_loss",
     "coherence_loss_max",
+    "coherence_loss_vs_mean",
     "coherence_recovery",
-    "hh_db_pre",
-    "hv_db_pre",
-    "hvhh_db_pre",
-    "hh_db_pre_max",
-    "dhh_event",
-    "dhh_event_min",
-    "dhv_event",
-    "dhv_event_min",
+    "gru_z",
+    "gru_z_min",
+    "gru_frac_below_m2",
     "slope"
   ],
   "outputs": [
@@ -44,54 +41,72 @@
   "labels": {
     "kind": "real",
     "source": "Copernicus EMS EMSR884 building damage grades: EMSR884_AOI02_GRA_MONIT01_v2, EMSR884_AOI02_GRA_PRODUCT_v1, EMSR884_AOI12_GRA_MONIT01_v3, EMSR884_AOI12_GRA_MONIT02_v1, EMSR884_AOI12_GRA_PRODUCT_v2",
-    "notes": "Positive = any building graded Damaged or Destroyed. Neighborhoods with only 'Possibly damaged' buildings are left out. Negatives are analysed areas with no graded building, which includes empty land."
+    "notes": "Positive = any building graded Damaged or Destroyed; Neighbourhoods with only 'Possibly damaged' are left out; negatives are analysed areas with no graded building."
   },
   "baseline": {
-    "name": "Mean coherence loss across the event (best threshold)",
+    "name": "Mean coherence loss across the event (Yun et al. 2015 DPM)",
     "metric": "average precision",
-    "score": 0.4254
+    "score": 0.6078
   },
   "model": {
-    "name": "LightGBM on per-Neighborhood radar features",
-    "metric": "average precision (mean of 5 block layouts)",
-    "score": 0.4984,
-    "framework": "LightGBM"
+    "name": "Ensemble LightGBM + U-Net with isotonic calibration",
+    "metric": "average precision (out-of-fold, spatial blocks)",
+    "score": 0.7254,
+    "framework": "LightGBM + PyTorch (GRU, U-Net)"
   },
   "extra_scores": [
     {
-      "name": "Model, worst block layout",
+      "name": "Baseline: coherence loss (Yun 2015)",
       "metric": "average precision",
-      "score": 0.4323
+      "score": 0.6078
     },
     {
-      "name": "Model, best block layout",
+      "name": "Self-supervised: -GRU z",
       "metric": "average precision",
-      "score": 0.5649
+      "score": 0.6576
     },
     {
-      "name": "Model, best F1",
-      "metric": "F1",
-      "score": 0.4841
-    },
-    {
-      "name": "Baseline, best F1",
-      "metric": "F1",
-      "score": 0.4337
-    },
-    {
-      "name": "Chance (share of damaged Neighborhoods)",
+      "name": "Unsupervised: Stouffer fusion (GRU only: GCOV missing)",
       "metric": "average precision",
-      "score": 0.0967
+      "score": 0.6576
+    },
+    {
+      "name": "LightGBM (damage features)",
+      "metric": "average precision",
+      "score": 0.6904
+    },
+    {
+      "name": "LightGBM without GRU features",
+      "metric": "average precision",
+      "score": 0.6736
+    },
+    {
+      "name": "LightGBM + location features (leakage test)",
+      "metric": "average precision",
+      "score": 0.6987
+    },
+    {
+      "name": "U-Net (weakly supervised)",
+      "metric": "average precision",
+      "score": 0.6718
+    },
+    {
+      "name": "Chance (share of damaged Neighbourhoods)",
+      "metric": "average precision",
+      "score": 0.1315
     }
   ],
-  "split": "Spatial 5-fold cross-validation over 5 km blocks (142 damaged, 1327 undamaged Neighborhoods); scores are out-of-fold",
+  "split": "Spatial 5-fold cross-validation over 5 km blocks, 5 shifted layouts for LightGBM (235 damaged, 1552 undamaged Neighbourhoods); out-of-fold scores",
   "limits": [
-    "Labels cover only the Caraballeda coast and part of Caracas; elsewhere in the site the map is an extrapolation",
-    "Copernicus mapped damage from optical imagery; buildings hidden by roofs or cloud are missed, so some 'undamaged' Neighborhoods are not",
-    "NISAR coherence is 80 m, coarser than single buildings: the Model finds damaged areas, not damaged buildings",
-    "One earthquake, one track (126 descending)",
-    "Only 142 damaged Neighborhoods: scores move by about 0.1 between block layouts, so the gain over the Baseline is modest"
+    "Labels cover only the Caraballeda coast and part of Caracas; elsewhere the map is an extrapolation",
+    "Copernicus graded damage from optical imagery: hidden damage is missed, so some negatives are wrong",
+    "40 m features and 250 m Neighbourhoods find damaged areas, not individual damaged buildings",
+    "One earthquake, one track (126 descending); coherence also falls for non-damage reasons (vegetation, rain, works)",
+    "PROVISIONAL NISAR products: re-run when VALIDATED granules exist",
+    "Probabilities are calibrated on the labelled strip only: use rank_pct / classes elsewhere (see the extrapolated flag)",
+    "Backscatter (GCOV) evidence was NOT used in this run",
+    "Fault size is constrained by the USGS moment (joint, not independent)"
   ],
   "status": "prototype",
-  "updated": "2026-11-13"
+  "updated": "2026-11-15"
 }

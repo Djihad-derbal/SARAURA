@@ -54,6 +54,7 @@ Study pages (Showcase Sites and finished Analyses share these; `{id}` is a site 
 | `GET /timeseries/{id}?variable&lon&lat`, `POST` with a GeoJSON polygon | A variable through time at a point, or mean and spread over a polygon |
 | `GET /stats/{id}?layer&date`, `POST` with a polygon | Percentiles, or area per class |
 | `GET /models`, `GET /models/{lens}` | Model cards: Model and Baseline scores, labels, limits, Status |
+| `GET /research/{id}/class_area?layer` | Hectares of each class of a class layer on every date (the flood pulse for a water Model) |
 
 Explorer:
 
@@ -169,11 +170,23 @@ did not train on (spatial blocks, or held-out Passes for the forecast). Build a 
 | Lens | Model | Labels | Score (Model vs Baseline) | Status |
 |---|---|---|---|---|
 | Wildfire | ChangeUTAE (U-Net + temporal attention) | Sentinel-2 burn index (proxy) | burned IoU 0.86 vs 0.21 (Algeria); 0.36 vs 0.18 on Washington, not retrained | prototype |
-| Earthquake | LightGBM per 250 m Neighborhood | Copernicus EMS EMSR884 (real) | average precision 0.50 vs 0.43 (chance 0.10) | prototype |
+| Earthquake | Ensemble LightGBM + U-Net on a GRU coherence anomaly (notebook export) | Copernicus EMS EMSR884 (real) | average precision 0.73 vs 0.61 (chance 0.13) | prototype |
 | Farming | LightGBM on the Pass series | USDA CDL 2024+2025 rotation rule (proxy; CDL 2026 not out) | macro F1 0.86 vs 0.53 | prototype |
-| Wetland | LightGBM per Pass | Sentinel-2 water index (proxy) | open-water IoU 0.63 vs 0.47 | prototype |
+| Wetland | LightGBM open water + physics-guided flooded vegetation + HMM (notebook export v3) | Sentinel-2 MNDWI open water (proxy); flooded vegetation from physics, marked not reliable | open-water IoU 0.21 vs 0.013 on held-out 5 km blocks at true prevalence (balanced-sample scores were higher for every method, so this is the honest number) | prototype |
 | Volcano | LightGBM on radar change statistics | Sentinel-2 hot spots (proxy) | average precision 0.073 vs 0.003 (chance) | prototype |
-| Subsidence | LightGBM trend correction | Own time series (self-supervised) | RMSE 1.20 cm vs 1.09 cm: **does not beat the straight line** | prototype |
+| Subsidence | LightGBM quantile forecast on an NSBAS series (notebook export) | Own time series (self-supervised) | RMSE 0.68 cm vs 0.63 cm: **does not beat the straight line** (its Kalman filter, 0.61, does) | prototype |
+
+**Season maps for water Models (ADR-0010).** When a Model maps "Open water" (and optionally "Flooded vegetation")
+on 2+ Passes, `python -m pipeline.predictions <site>` also derives `pred_<lens>_frequency` (share of Passes wet),
+`pred_<lens>_hydroperiod` (days wet) and `pred_<lens>_onset` (days after the first Pass until first wet), and the
+research plots show the flood pulse. 2-class and 3-class Models both work, with no code change.
+
+**Models trained elsewhere (ADR-0010).** Check a notebook export before it replaces a Model:
+
+```bash
+.venv/Scripts/python ml/check_export.py path/to/export              # report: card, like-for-like score, grid, classes, dates, pulse
+.venv/Scripts/python ml/check_export.py path/to/export --install    # install only if every check passes (keeps the old Model)
+```
 
 All scores, splits and limits are on each Model card. Team choices: earthquake damage =
 Damaged or Destroyed buildings; volcano lava = hot on 3+ Sentinel-2 scenes within 10 km of the

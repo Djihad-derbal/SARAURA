@@ -1,5 +1,6 @@
 id: a7_mud_to_water
 title: "Is mud heading to the rivers and the dams?"
+topic: "Mud to rivers and dams"
 short: "How much of each river's, reservoir's and river mouth's catchment burned on steep ground, and where each spot's rain ends up."
 lens: wildfire
 recipe: mud_to_water

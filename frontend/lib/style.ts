@@ -7,6 +7,8 @@ export const COLORMAPS: Record<string, string[]> = {
   greys_r: ["#000000", "#525252", "#969696", "#d9d9d9", "#ffffff"],
   rdbu: ["#67001f", "#e58368", "#f6f6f6", "#68aacf", "#053061"],
   ylorrd: ["#ffffcc", "#fed875", "#fc8c3b", "#e2191c", "#800026"],
+  ylgnbu: ["#ffffd9", "#c6e8b4", "#40b5c3", "#215ea8", "#081d58"],
+  cividis: ["#00224d", "#434e6b", "#7c7b78", "#baac6c", "#fde737"],
 };
 
 export const gradient = (name: string, dir = "to right") => `linear-gradient(${dir}, ${(COLORMAPS[name] ?? COLORMAPS.viridis).join(", ")})`;

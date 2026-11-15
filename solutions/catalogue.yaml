@@ -253,3 +253,82 @@ confirm_next_pass:
   cost: low
   source: "Wet soil and leaves raise radar backscatter (NASA Earthdata SAR introduction)"
   check: "The same patch on the next Pass."
+
+# ---------------------------------------------------------------- after an earthquake
+
+search_rescue_first:
+  title: "Send search and rescue here first"
+  what: "Start the search sectors in the blocks flagged high, then widen. Collapsed buildings in dense neighbourhoods are where trapped people are most likely."
+  cost: medium
+  source: "INSARAG Guidelines (2020), UN OCHA: assessment, search and rescue sectorisation"
+  check: "Reports from residents and local responders; access roads open."
+
+rapid_safety_tagging:
+  title: "Rapid safety tagging of buildings (green, yellow, red)"
+  what: "Trained engineers walk the flagged blocks and post a tag on each building: safe to enter, limited entry, or unsafe. It takes minutes per building and tells families whether they can go home."
+  cost: low
+  source: "ATC-20, Procedures for Postearthquake Safety Evaluation of Buildings (Applied Technology Council)"
+  check: "Aftershock forecast before re-entry."
+
+detailed_assessment:
+  title: "Detailed engineering assessment"
+  what: "For buildings tagged yellow or red: an engineer checks columns, joints and walls in detail and decides between repair, strengthening or demolition."
+  cost: medium
+  source: "ATC-20 detailed evaluation; FEMA P-2018, Seismic Evaluation of Older Concrete Buildings for Collapse Potential"
+  check: "Structural drawings if available; signs of column shear cracks."
+
+check_each_pass:
+  title: "Re-check with each new radar Pass"
+  what: "NISAR passes every 12 days. Look at this place again after each Pass: new damage from aftershocks, or ground that keeps moving, shows up within two weeks."
+  cost: low
+  source: "Team practice; NISAR repeats every 12 days"
+  check: "Compare the answer with the previous Pass."
+
+rebuild_to_code:
+  title: "Rebuild to the seismic building code"
+  what: "The ground here was shaken but not bent or torn: rebuild with the code's seismic design for the zone and soil. Most collapses come from buildings that did not follow it."
+  cost: medium
+  source: "COVENIN 1756-1:2001, Edificaciones Sismorresistentes (Venezuela)"
+  check: "Soil type for the plot (the code's soil profile), as required for any building permit."
+
+site_study_first:
+  title: "Geotechnical site study before rebuilding"
+  what: "Boreholes or geophysics to check for cracked ground, loosened soil or a fault branch before a new foundation is designed."
+  cost: medium
+  source: "General geotechnical practice; COVENIN 1756-1:2001 requires site studies for special soils"
+  check: "Open cracks in the ground, tilted walls or broken pipes nearby."
+
+fault_setback:
+  title: "Keep new buildings off the torn strip"
+  what: "Where the ground broke or bent sharply, do not rebuild across it. A fault study locates the trace and sets a setback; the strip can become a park, road or open space."
+  cost: high
+  source: "Alquist-Priolo Earthquake Fault Zoning Act (California, 1972): buildings may not straddle active fault traces"
+  check: "Trenching or geophysics across the strip to find the fault trace."
+
+slope_check_before_rain:
+  title: "Inspect shaken slopes before the rainy season"
+  what: "Earthquakes crack steep slopes that then slide in the next heavy rain. Walk the slopes above homes and roads for fresh cracks and drain the water away from them."
+  cost: low
+  source: "Keefer, D. K. (1984). Landslides caused by earthquakes. GSA Bulletin 95; Vargas 1999 debris flows (Venezuela) as a local reminder"
+  check: "Fresh cracks at the top of slopes, leaning trees or walls, muddy springs."
+
+crack_gauges:
+  title: "Install crack gauges or survey points"
+  what: "Simple gauges across wall cracks, or a few survey points, show within weeks whether movement continues, between radar Passes and at the scale of one building."
+  cost: low
+  source: "General monitoring practice for slow-moving ground"
+  check: "Read the gauges weekly; act if cracks keep opening."
+
+inspect_section:
+  title: "Inspect the section before full use"
+  what: "Walk or drive the flagged section: pavement cracks and steps, tunnel linings, and under the road the water, sewer and gas pipes, which break where the ground bends or tears."
+  cost: medium
+  source: "American Lifelines Alliance (2005). Seismic Guidelines for Water Pipelines"
+  check: "Leak tests on the pipes under the road; pressure drops reported by the utility."
+
+flexible_pipe_joints:
+  title: "Flexible or restrained joints where pipes cross moving ground"
+  what: "When repairing pipes across torn or moving ground, use joints that can stretch and rotate, or ductile pipe, so the next earthquake or creep does not break them again."
+  cost: medium
+  source: "American Lifelines Alliance (2005). Seismic Guidelines for Water Pipelines; O'Rourke and Liu (1999), MCEER Monograph 3"
+  check: "Where exactly the ground moved along the pipe route (this map, then a survey)."

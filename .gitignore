@@ -27,3 +27,6 @@ ml/runs/
 # Local tool state
 .claude/
 .pytest_cache/
+
+# Local run state of scripts/start.ps1 (logs, public link)
+.run/

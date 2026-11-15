@@ -14,3 +14,10 @@ wildfire:
   - {id: water, label: "Dam and water agency", questions: [a7_mud_to_water, a1_burned_slopes]}
   - {id: farmer, label: "Farmer or agricultural services", questions: [a5_farms_burned, a4_forest_recovery, a3_replant_first]}
   - {id: park, label: "National park", questions: [a3_replant_first, a4_forest_recovery, a9_since_last_pass]}
+earthquake:
+  - {id: civil_protection, label: "Civil protection and rescue", questions: [e1_inspect_first, e4_lifelines_crossed, e3_still_moving]}
+  - {id: engineer, label: "Building inspector or engineer", questions: [e1_inspect_first, e2_rebuild_where, e3_still_moving]}
+  - {id: planning, label: "Urban planning and reconstruction", questions: [e2_rebuild_where, e3_still_moving, e1_inspect_first]}
+  - {id: infrastructure, label: "Roads, Metro and water utilities", questions: [e4_lifelines_crossed, e3_still_moving]}
+  - {id: family, label: "Family or home owner", questions: [e2_rebuild_where, e3_still_moving, e1_inspect_first]}
+  - {id: insurer, label: "Insurer or aid agency", questions: [e1_inspect_first, e2_rebuild_where]}

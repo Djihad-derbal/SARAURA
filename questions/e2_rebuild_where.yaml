@@ -1,0 +1,46 @@
+id: e2_rebuild_where
+title: "Where should we not rebuild the same way?"
+topic: "Rebuild here?"
+short: "Ground the earthquake bent or tore, and shaken steep slopes: where rebuilding needs a site or fault study first."
+lens: earthquake
+recipe: rebuild_where
+order: 2
+evidence: [strain_cm_km, slope80, damage_class]
+thresholds:
+  amber_cm_km: 5       # 5e-5 of line-of-sight motion per metre after 400 m smoothing (team choice: radar underestimates strain)
+  red_cm_km: 10        # about the most-bent 1% of the Venezuela ground (p99 10.9 cm/km); the true strain is larger (team choice)
+  steep_deg: 25        # shaken slopes of 25 degrees or more with damage signs (Keefer 1984: most quake landslides are on steep slopes)
+classes:
+  - value: 1
+    label: "Rebuild to the seismic code"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "The ground moved as a block here: the earthquake shook it but did not bend or tear it."
+    solutions: [rebuild_to_code]
+  - value: 2
+    label: "Rebuild after a site study"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "The ground was noticeably bent, or this is a steep slope with damage signs that could slide."
+    solutions: [site_study_first, slope_check_before_rain, rebuild_to_code]
+  - value: 3
+    label: "Special study before rebuilding"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "The ground was strongly bent or torn, as next to a fault break. Rebuilding the same way here risks the same damage."
+    solutions: [fault_setback, site_study_first]
+  - value: 4
+    label: "Radar lost the signal"
+    color: "#9ca3af"
+    verdict: unknown
+    meaning: "The radar could not measure how the ground moved here, often right on the fault where the ground broke. Check on the ground first."
+    solutions: [site_study_first]
+sources:
+  - "Alquist-Priolo Earthquake Fault Zoning Act (California, 1972): no new buildings across active fault traces; setbacks set by a fault study"
+  - "Keefer, D. K. (1984). Landslides caused by earthquakes. Geological Society of America Bulletin 95, 406-421"
+  - "COVENIN 1756-1:2001, Edificaciones Sismorresistentes (Venezuela's seismic building code)"
+limits:
+  - "Strain thresholds (5 and 10 cm/km) are team choices set on the measured spread (10 cm/km is about the most-bent 1%): radar gives one direction of motion (line of sight), so the true strain can be larger."
+  - "Motion is measured on 80 m pixels and smoothed over 400 m: a fault break narrower than that shows as a strong gradient or as lost signal."
+  - "Soil amplification (soft sediments that shake more) is not measured here; the seismic code's soil zones still apply."
+status: prototype

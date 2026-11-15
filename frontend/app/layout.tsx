@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Orbitron, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
 const sans = IBM_Plex_Sans({ variable: "--font-plex-sans", subsets: ["latin"], weight: ["400", "500", "600"] });
 const mono = IBM_Plex_Mono({ variable: "--font-plex-mono", subsets: ["latin"], weight: ["400", "500"] });
 const display = Space_Grotesk({ variable: "--font-display", subsets: ["latin"], weight: ["400", "500", "600"] });
+// The hero's space typeface: wide, geometric, heavy.
+const space = Orbitron({ variable: "--font-orbitron", subsets: ["latin"], weight: ["700", "800", "900"] });
 
 export const metadata: Metadata = {
   title: "SARAURA: NISAR radar, explained",
@@ -15,7 +17,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable} ${display.variable} h-full antialiased`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable} ${display.variable} ${space.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">{children}</body>
     </html>
   );

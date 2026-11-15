@@ -3,6 +3,8 @@
   /research/{id}/series_by_class   a variable's time series inside each class of a categorical layer
                                    (e.g. HV inside vs outside the burned area; maize vs soybean growth curves)
   /research/{id}/change_by_date    share of the area with a strong backscatter drop or rise at each Pass
+  /research/{id}/class_area        hectares of each class of a categorical layer on every date
+                                   (e.g. the flood pulse: open water and flooded vegetation through the season)
   /research/{id}/agreement         where the AI Model and its Baseline agree, as areas and a picture
 
 Results are cached per study build (manifest generated_at), so a Report asks for them cheaply.
@@ -109,6 +111,36 @@ def change_by_date(study_id: str, layer: str = "dhv", threshold: float = Query(3
         return {"layer": layer, "label": lay["label"], "unit": lay["unit"], "threshold": threshold, "rows": rows}
 
     return _cached(study_id, f"cbd_{layer}_{threshold:g}", build)
+
+
+@router.get("/research/{study_id}/class_area")
+def class_area(study_id: str, layer: str | None = None):
+    """Hectares of each coloured class of a categorical layer on every date it has. Without `layer`: the AI Model's
+    class layer, else the Baseline's. With a water Model this is the flood pulse."""
+    import rasterio
+
+    if layer is not None and not ID.fullmatch(layer):
+        raise HTTPException(400, "Malformed layer")
+
+    def build(m):
+        cats = [l for l in m["layers"] if l["colormap"] == "categorical" and l.get("classes")]
+        lay = (next((l for l in cats if l["id"] == layer), None) if layer
+               else next((l for l in cats if l["kind"] == "prediction"), None) or next((l for l in cats if l["kind"] == "baseline"), None))
+        if lay is None:
+            raise HTTPException(404, f"No class layer {layer}" if layer else "This study has no class layer")
+        values = [c["value"] for c in lay["classes"]]
+        rows = []
+        for d in lay["dates"]:
+            with rasterio.open(cog_path(study_id, lay["id"], d)) as ds:
+                a = ds.read(1)
+                cell_ha = abs(ds.transform.a * ds.transform.e) / 1e4
+            counts = np.bincount(a.ravel(), minlength=256)
+            rows.append({"date": d, "analysed_ha": round(float(counts[:255].sum()) * cell_ha, 2),
+                         "area_ha": {str(v): round(float(counts[v]) * cell_ha, 2) for v in values}})
+        return {"layer": lay["id"], "label": lay["label"], "kind": lay["kind"], "status": lay["status"],
+                "classes": lay["classes"], "rows": rows}
+
+    return _cached(study_id, f"area_{layer or 'auto'}", build)
 
 
 def _agreement_arrays(study_id: str, m: dict):

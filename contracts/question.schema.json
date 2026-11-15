@@ -5,38 +5,158 @@
   "description": "A question a user asks of a Study, answered by a named rule recipe over evidence layers. Adding a question is a new file plus, at most, one recipe; no new Model.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "title", "short", "lens", "recipe", "order", "evidence", "thresholds", "classes", "sources", "limits", "status"],
+  "required": [
+    "id",
+    "title",
+    "short",
+    "lens",
+    "recipe",
+    "order",
+    "evidence",
+    "thresholds",
+    "classes",
+    "sources",
+    "limits",
+    "status"
+  ],
   "properties": {
-    "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,40}$"},
-    "title": {"type": "string", "minLength": 8, "maxLength": 90},
-    "short": {"type": "string", "maxLength": 160},
-    "lens": {"$ref": "site.schema.json#/$defs/lens"},
-    "recipe": {"type": "string", "pattern": "^[a-z_]+$", "description": "Function name in pipeline/answers.py RECIPES"},
-    "order": {"type": "integer", "minimum": 1},
-    "evidence": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "context": {"type": "array", "items": {"enum": ["lines", "places", "roads", "fields", "water"]}, "description": "OpenStreetMap features the recipe needs (pipeline/context.py)"},
-    "thresholds": {"type": "object", "additionalProperties": {"type": "number"}},
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,40}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 90
+    },
+    "short": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "lens": {
+      "$ref": "site.schema.json#/$defs/lens"
+    },
+    "recipe": {
+      "type": "string",
+      "pattern": "^[a-z_]+$",
+      "description": "Function name in pipeline/answers.py RECIPES"
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "context": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "lines",
+          "places",
+          "roads",
+          "fields",
+          "water"
+        ]
+      },
+      "description": "OpenStreetMap features the recipe needs (pipeline/context.py)"
+    },
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
     "classes": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["value", "label", "color", "verdict", "meaning", "solutions"],
+        "required": [
+          "value",
+          "label",
+          "color",
+          "verdict",
+          "meaning",
+          "solutions"
+        ],
         "properties": {
-          "value": {"type": "integer", "minimum": 1, "maximum": 254},
-          "label": {"type": "string"},
-          "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
-          "verdict": {"enum": ["good", "caution", "bad", "unknown"]},
-          "meaning": {"type": "string"},
-          "solutions": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+          "value": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 254
+          },
+          "label": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
+          "verdict": {
+            "enum": [
+              "good",
+              "caution",
+              "bad",
+              "unknown"
+            ]
+          },
+          "meaning": {
+            "type": "string"
+          },
+          "solutions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
         }
       }
     },
-    "point_only": {"type": "boolean", "description": "Answered only at a clicked spot; no map layer"},
-    "features": {"enum": ["lines", "points"], "description": "Its ranked items are drawn on the map as styled lines or labelled points (GET /answers/{id}/features/{question})"},
-    "solutions": {"type": "array", "items": {"type": "string"}, "description": "Solutions for a point_only question"},
-    "sources": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "limits": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-    "status": {"$ref": "site.schema.json#/$defs/status"}
+    "point_only": {
+      "type": "boolean",
+      "description": "Answered only at a clicked spot; no map layer"
+    },
+    "features": {
+      "enum": [
+        "lines",
+        "points"
+      ],
+      "description": "Its ranked items are drawn on the map as styled lines or labelled points (GET /answers/{id}/features/{question})"
+    },
+    "solutions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Solutions for a point_only question"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "limits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "status": {
+      "$ref": "site.schema.json#/$defs/status"
+    },
+    "topic": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "A two-to-four word name for lists and map bubbles, e.g. 'Mud onto villages'"
+    }
   }
 }

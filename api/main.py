@@ -24,7 +24,7 @@ import rasterio.features  # noqa: E402,F401
 import rasterio.warp  # noqa: E402,F401
 import rio_tiler.io  # noqa: E402,F401
 
-from . import analyses, answers, jobs, report, research, study
+from . import analyses, answers, jobs, report, research, showcase_requests, study
 
 app = FastAPI(title="SARAURA API", version="0.3.0", description="NISAR radar, explained: Showcase Sites, on-demand Analyses, Models and Reports.")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
@@ -33,6 +33,7 @@ app.include_router(analyses.router, tags=["Analyses"])
 app.include_router(report.router, tags=["Report"])
 app.include_router(research.router, tags=["Research plots"])
 app.include_router(answers.router, tags=["Questions and answers"])
+app.include_router(showcase_requests.router, tags=["Showcase requests"])
 
 _series_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="series")
 PNG = {"Cache-Control": "public, max-age=86400"}

@@ -549,7 +549,7 @@ export default function StudyPage({ id, mode = "research" }: { id: string; mode?
           <section className={`px-4 ${place ? "border-t border-line py-4" : "py-4"}`} role={place ? undefined : "tabpanel"} aria-label="Ask this place">
             {doc ? (
               <AskPanel doc={doc} spot={answers.spot} spotBusy={answers.spotBusy} spotErr={answers.spotErr} role={role} onRole={setRole}
-                openId={openId} onOpen={openQuestion} onGo={(s) => goTo(s)} scrollKey={scrollKey} />
+                openId={openId} onOpen={openQuestion} onGo={(s) => goTo(s)} onClear={() => setProbe(null)} scrollKey={scrollKey} />
             ) : answers.settled ? (
               <p className="text-sm text-ink-2">No questions are answered for this place yet. <Link href={`/study/${id}`} className="text-accent underline underline-offset-2">Open its research view</Link>.</p>
             ) : <div className="busy-bar h-0.5" aria-hidden />}

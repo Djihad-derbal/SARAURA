@@ -38,6 +38,7 @@
   --font-sans: var(--font-plex-sans);
   --font-mono: var(--font-plex-mono);
   --font-display: var(--font-display);
+  --font-space: var(--font-orbitron);
 }
 
 body {
@@ -70,6 +71,15 @@ body {
   letter-spacing: 0.22em;
   text-transform: uppercase;
 }
+/* The hero's giant word: lit from above like a planet's limb, fading into space at its foot. */
+.earth-word {
+  background: linear-gradient(180deg, #f4fbfc 0%, #b8e9ee 38%, color-mix(in srgb, var(--accent) 70%, #0b3b47) 72%, rgb(4 17 26 / 0) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 40px rgb(45 212 191 / 0.18));
+}
+
 .glow-text {
   background: linear-gradient(100deg, #e4f2f4 10%, var(--accent) 50%, var(--accent-2) 90%);
   -webkit-background-clip: text;

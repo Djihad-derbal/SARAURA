@@ -1,5 +1,6 @@
 id: a9_since_last_pass
 title: "What changed since the last Pass?"
+topic: "Change since last pass"
 short: "Where the radar signal changed between the last two 12-day Passes, with changed patches near villages and roads first."
 lens: wildfire
 recipe: since_last_pass

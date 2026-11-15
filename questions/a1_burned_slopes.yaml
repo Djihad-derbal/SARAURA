@@ -1,5 +1,6 @@
 id: a1_burned_slopes
 title: "Which burned slopes could send mud onto villages this winter?"
+topic: "Mud onto villages"
 short: "Burned steep ground, the channels it drains into, and the villages and roads below."
 lens: wildfire
 recipe: burned_slopes

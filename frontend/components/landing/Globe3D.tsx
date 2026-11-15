@@ -1,20 +1,22 @@
 "use client";
 
-import { Stars } from "@react-three/drei";
+import { Html, Stars } from "@react-three/drei";
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 
 /**
  * The home page's Earth: NASA Blue Marble by day and Black Marble city lights by night, split by a soft
  * terminator, under a teal atmosphere, with NISAR on its orbit pointing its radar at the ground. It flies between
  * three framings as the story scrolls: a huge horizon (hero), the whole planet (intro), and a small locator in
- * the corner turned to the place a chapter is about.
+ * the corner turned to the place a chapter is about. In "explore" it sits in the middle of the screen and can be turned
+ * by dragging, zoomed with the wheel, and its labelled pins clicked.
  */
 
-export type GlobeMode = "hero" | "intro" | "focus" | "corner";
-export type GlobeFocus = { mode: GlobeMode; lat?: number; lon?: number; marker?: string | null };
-export type GlobeMarker = { id: string; lat: number; lon: number; color: string };
+export type GlobeMode = "hero" | "intro" | "focus" | "corner" | "explore";
+export type GlobeFocus = { mode: GlobeMode; lat?: number; lon?: number; marker?: string | null; zoom?: number };
+/** site: a Showcase Site (clickable). requested: a place someone asked to study. draft: the spot being requested now. */
+export type GlobeMarker = { id: string; lat: number; lon: number; color: string; label?: string; dim?: boolean; kind?: "site" | "requested" | "draft" };
 
 const D2R = Math.PI / 180;
 
@@ -77,15 +79,68 @@ function wrap(a: number) {
   return Math.atan2(Math.sin(a), Math.cos(a));
 }
 
-type Props = { focus: GlobeFocus; markers: GlobeMarker[]; reduced: boolean; tint?: string };
+type Props = {
+  focus: GlobeFocus; markers: GlobeMarker[]; reduced: boolean; tint?: string;
+  onPick?: (id: string) => void;
+  /** When set, a click on the Earth picks that spot (latitude, longitude) instead of turning it. */
+  onPickPoint?: (lat: number, lon: number) => void;
+};
 
-function Earth({ focus, markers, reduced, tint = "#2dd4bf" }: Props) {
+function Earth({ focus, markers, reduced, tint = "#2dd4bf", onPick, onPickPoint }: Props) {
   const [day, night] = useLoader(THREE.TextureLoader, ["/textures/earth-day.jpg", "/textures/earth-night.jpg"]);
   const outer = useRef<THREE.Group>(null); // tilt (latitude) and placement
   const inner = useRef<THREE.Group>(null); // spin (longitude)
   const orbit = useRef<THREE.Group>(null);
   const rings = useRef<THREE.Mesh[]>([]);
-  const { viewport } = useThree();
+  const earth = useRef<THREE.Mesh>(null);
+  const { viewport, gl } = useThree();
+  const explore = focus.mode === "explore";
+  // Explore: where the globe should face (yaw = spin, pitch = tilt), how far it is zoomed, and whether a hand is on it.
+  const view = useRef({ yaw: 0, pitch: 0.3, zoom: 1, zoomTarget: 1, dragging: false, touched: false, x: 0, y: 0 });
+  useEffect(() => {
+    if (!explore) return;
+    const v = view.current;
+    if (focus.lon !== undefined && focus.lat !== undefined) {
+      const cur = inner.current?.rotation.y ?? 0;
+      v.yaw = cur + wrap(-Math.PI / 2 - focus.lon * D2R - cur); // turn the shortest way to the place
+      v.pitch = focus.lat * D2R;
+      v.touched = true;
+    } else {
+      v.yaw = inner.current?.rotation.y ?? 0;
+      v.touched = false;
+    }
+  }, [explore, focus.lon, focus.lat]);
+  // A picked place glides in close; letting it go glides back out.
+  useEffect(() => { if (explore) view.current.zoomTarget = focus.zoom ?? 1; }, [explore, focus.zoom]);
+  // Drag to turn, wheel to zoom.
+  useEffect(() => {
+    if (!explore) return;
+    const el = gl.domElement;
+    const v = view.current;
+    const down = (e: PointerEvent) => { v.dragging = true; v.touched = true; v.x = e.clientX; v.y = e.clientY; el.setPointerCapture(e.pointerId); };
+    const move = (e: PointerEvent) => {
+      if (!v.dragging) return;
+      const f = 0.006 / v.zoom;
+      v.yaw += (e.clientX - v.x) * f;
+      v.pitch = Math.max(-1.25, Math.min(1.25, v.pitch + (e.clientY - v.y) * f));
+      v.x = e.clientX;
+      v.y = e.clientY;
+    };
+    const up = (e: PointerEvent) => { v.dragging = false; if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId); };
+    const wheel = (e: WheelEvent) => { e.preventDefault(); v.zoomTarget = Math.max(0.75, Math.min(2.6, v.zoomTarget * Math.exp(-e.deltaY * 0.0012))); };
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+    el.addEventListener("wheel", wheel, { passive: false });
+    return () => {
+      el.removeEventListener("pointerdown", down);
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      el.removeEventListener("wheel", wheel);
+    };
+  }, [explore, gl]);
   const mat = useMemo(() => new THREE.ShaderMaterial({
     uniforms: { dayTex: { value: day }, nightTex: { value: night }, sunDir: { value: new THREE.Vector3(-1, 0.25, 0.35) }, tint: { value: new THREE.Color("#2dd4bf") } },
     vertexShader: EARTH_VERT,
@@ -124,6 +179,12 @@ function Earth({ focus, markers, reduced, tint = "#2dd4bf" }: Props) {
       px = wide ? viewport.width * 0.2 : 0;
       py = wide ? 0 : viewport.height * 0.16;
       sun = [-0.55, 0.35, 0.9];
+    } else if (explore) {
+      // the whole planet in the middle, between the two side panels
+      sc = (wide ? Math.min(1.05, viewport.height * 0.38) : viewport.width * 0.42) * view.current.zoom;
+      py = wide ? -viewport.height * 0.02 : viewport.height * 0.06;
+      tiltX = view.current.pitch;
+      sun = [-0.45, 0.35, 1];
     } else if (focus.mode === "focus") {
       sc = Math.min(0.9, viewport.height * 0.34);
       px = wide ? viewport.width * 0.2 : 0;
@@ -142,9 +203,15 @@ function Earth({ focus, markers, reduced, tint = "#2dd4bf" }: Props) {
     o.position.y += (py - o.position.y) * k;
     const s = o.scale.x + (sc - o.scale.x) * k;
     o.scale.setScalar(s);
-    o.rotation.x += (tiltX - o.rotation.x) * k;
-    // spin: free in hero and intro, turned to the place in corner mode (shortest way round)
-    if ((focus.mode === "corner" || focus.mode === "focus") && focus.lon !== undefined) {
+    const kd = explore && view.current.dragging ? Math.min(1, dt * 14) : k; // a hand on the globe moves it at once
+    if (explore) view.current.zoom += (view.current.zoomTarget - view.current.zoom) * Math.min(1, dt * 3);
+    o.rotation.x += (tiltX - o.rotation.x) * kd;
+    // spin: free in hero and intro, turned to the place in corner mode (shortest way round), by hand in explore
+    if (explore) {
+      const v = view.current;
+      if (!v.touched && !reduced) v.yaw += 0.05 * dt; // turns slowly until someone touches it or picks a place
+      n.rotation.y += (v.yaw - n.rotation.y) * kd;
+    } else if ((focus.mode === "corner" || focus.mode === "focus") && focus.lon !== undefined) {
       const target = -Math.PI / 2 - focus.lon * D2R;
       n.rotation.y += wrap(target - n.rotation.y) * k;
     } else if (!reduced) {
@@ -163,22 +230,56 @@ function Earth({ focus, markers, reduced, tint = "#2dd4bf" }: Props) {
       if (!r) return;
       const ph = (t * 0.6 + i * 0.37) % 1;
       const active = markers[i]?.id === focus.marker;
-      r.scale.setScalar((active ? 1.6 : 1) * (1 + ph * 2.2));
-      (r.material as THREE.MeshBasicMaterial).opacity = (1 - ph) * (active ? 0.95 : 0.55);
+      const dim = markers[i]?.dim;
+      r.scale.setScalar((active ? 1.6 : 1) * (explore ? 1.5 : 1) * (1 + ph * 2.2));
+      (r.material as THREE.MeshBasicMaterial).opacity = dim ? 0 : (1 - ph) * (active ? 0.95 : 0.55);
     });
   });
 
   return (
     <group ref={outer}>
       <group ref={inner}>
-        <mesh material={mat}><sphereGeometry args={[1, 128, 128]} /></mesh>
+        {/* in explore, clicks on the globe itself stop here, so pins on the far side can't be picked through it */}
+        <mesh ref={earth} material={mat} onClick={explore ? (e) => {
+          e.stopPropagation();
+          if (!onPickPoint || e.delta > 6 || !inner.current) return;
+          const q = inner.current.worldToLocal(e.point.clone()).normalize(); // back to the globe's own lon/lat
+          onPickPoint(Math.asin(q.y) / D2R, Math.atan2(-q.z, q.x) / D2R);
+        } : undefined}><sphereGeometry args={[1, 128, 128]} /></mesh>
         {markers.map((m, i) => {
           const p = ll(m.lat, m.lon, 1.004);
           const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), p.clone().normalize());
+          const kind = m.kind ?? "site";
+          const pick = explore && onPick && kind === "site" ? () => onPick(m.id) : undefined;
           return (
             <group key={m.id} position={p} quaternion={q}>
-              <mesh><circleGeometry args={[0.012, 24]} /><meshBasicMaterial color={m.color} toneMapped={false} /></mesh>
-              <mesh ref={(el) => { if (el) rings.current[i] = el; }}>
+              {kind === "requested" ? (
+                <mesh scale={explore ? 1.3 : 1}><ringGeometry args={[0.007, 0.011, 24]} /><meshBasicMaterial color="#cbd5e1" transparent opacity={0.8} toneMapped={false} /></mesh>
+              ) : (
+                <mesh scale={explore ? (kind === "draft" ? 2 : 1.6) : 1}><circleGeometry args={[0.012, 24]} /><meshBasicMaterial color={m.dim ? "#475569" : m.color} toneMapped={false} /></mesh>
+              )}
+              {pick && (
+                <mesh onClick={(e) => { e.stopPropagation(); if (e.delta < 6) pick(); }}
+                  onPointerOver={() => { document.body.style.cursor = "pointer"; }} onPointerOut={() => { document.body.style.cursor = ""; }}>
+                  <circleGeometry args={[0.05, 16]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} />
+                </mesh>
+              )}
+              {explore && m.label && kind !== "site" && (
+                <Html position={[0, 0, 0.01]} center occlude={[earth as RefObject<THREE.Object3D>]} zIndexRange={[20, 10]} style={{ pointerEvents: "none" }}>
+                  <span className={"block -translate-y-5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] backdrop-blur " + (kind === "draft" ? "border border-accent bg-accent/25 text-ink" : "border border-white/10 bg-black/50 text-ink-3")}>
+                    {m.label}
+                  </span>
+                </Html>
+              )}
+              {explore && m.label && kind === "site" && (
+                <Html position={[0, 0, 0.01]} center occlude={[earth as RefObject<THREE.Object3D>]} zIndexRange={[20, 10]} style={{ pointerEvents: "none" }}>
+                  <button type="button" onClick={pick} aria-label={"Open " + m.label}
+                    className={"pointer-events-auto -translate-y-6 cursor-pointer whitespace-nowrap rounded-full border px-2.5 py-1 text-[12px] backdrop-blur transition-all duration-300 " + (focus.marker === m.id ? "border-accent bg-accent/25 text-ink" : "border-white/15 bg-black/55 text-ink-2 hover:text-ink") + (m.dim ? " opacity-35" : "")}>
+                    {m.label}
+                  </button>
+                </Html>
+              )}
+              <mesh visible={kind !== "requested"} ref={(el) => { if (el) rings.current[i] = el; }}>
                 <ringGeometry args={[0.016, 0.021, 40]} />
                 <meshBasicMaterial color={m.color} transparent opacity={0.6} toneMapped={false} depthWrite={false} />
               </mesh>
@@ -207,12 +308,14 @@ function Earth({ focus, markers, reduced, tint = "#2dd4bf" }: Props) {
   );
 }
 
-export default function Globe3D({ focus, markers, reduced, tint }: Props) {
+export default function Globe3D({ focus, markers, reduced, tint, onPick, onPickPoint }: Props) {
+  const explore = focus.mode === "explore";
   return (
-    <Canvas camera={{ position: [0, 0, 3.4], fov: 40 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }} style={{ pointerEvents: "none" }}>
+    <Canvas camera={{ position: [0, 0, 3.4], fov: 40 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true }}
+      style={{ pointerEvents: explore ? "auto" : "none", cursor: explore ? (onPickPoint ? "crosshair" : "grab") : undefined, touchAction: explore ? "none" : undefined }}>
       <Stars radius={60} depth={40} count={2600} factor={2.6} saturation={0} fade speed={reduced ? 0 : 0.4} />
       <Suspense fallback={null}>
-        <Earth focus={focus} markers={markers} reduced={reduced} tint={tint} />
+        <Earth focus={focus} markers={markers} reduced={reduced} tint={tint} onPick={onPick} onPickPoint={onPickPoint} />
       </Suspense>
     </Canvas>
   );

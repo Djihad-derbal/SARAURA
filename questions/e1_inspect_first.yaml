@@ -1,0 +1,34 @@
+id: e1_inspect_first
+title: "Which neighbourhoods should teams check first?"
+topic: "Check first"
+short: "Where buildings were most likely damaged, ranked by place, so search and inspection teams start in the right streets."
+lens: earthquake
+recipe: inspect_first
+order: 1
+evidence: [damage_class, coherence_loss]
+context: [places]
+thresholds:
+  radius_m: 500        # damage likelihood is summed within 500 m of each named place
+  min_share: 5         # a place is listed once 5% of the ground around it is elevated or high
+classes:
+  - value: 1
+    label: "Check next"
+    color: "#f59e0b"
+    verdict: caution
+    meaning: "Elevated chance that buildings in this 250 m block were damaged."
+    solutions: [rapid_safety_tagging, check_each_pass]
+  - value: 2
+    label: "Check first"
+    color: "#b91c1c"
+    verdict: bad
+    meaning: "High chance that buildings in this 250 m block were damaged: the radar signal of the buildings changed sharply during the earthquake."
+    solutions: [search_rescue_first, rapid_safety_tagging, detailed_assessment]
+sources:
+  - "Yun, S.-H. et al. (2015). Rapid damage mapping for the 2015 Mw 7.8 Gorkha earthquake using synthetic aperture radar data from COSMO-SkyMed and ALOS-2. Seismological Research Letters 86(6) (coherence-loss damage proxy maps)"
+  - "Copernicus Emergency Management Service, activation EMSR884 (building damage grades used to train and score the AI Model)"
+  - "INSARAG Guidelines (2020), UN OCHA: sectorisation and prioritisation of search areas"
+limits:
+  - "The map ranks 250 m blocks; it does not see inside buildings or count casualties. Use it to choose where to look first."
+  - "Damage was only labelled on the Caraballeda coast and part of Caracas; elsewhere the AI Model extrapolates (read its card)."
+  - "Coherence also falls with vegetation change, rain and construction, so some flags are false."
+status: prototype

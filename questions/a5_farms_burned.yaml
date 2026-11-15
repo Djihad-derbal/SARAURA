@@ -1,5 +1,6 @@
 id: a5_farms_burned
 title: "Which farms lost their cover?"
+topic: "Farms that burned"
 short: "Each mapped field and orchard, with the share of it that burned: a ready list for compensation."
 lens: wildfire
 recipe: farms_burned

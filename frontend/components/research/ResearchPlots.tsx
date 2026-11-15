@@ -7,11 +7,13 @@ import {
   fetchAgreement,
   fetchAreaSeries,
   fetchChangeByDate,
+  fetchClassArea,
   fetchSeriesByClass,
   longDate,
   splitLayer,
   type Agreement,
   type ChangeByDate,
+  type ClassArea,
   type GeoPolygon,
   type Manifest,
   type SeriesByClass,
@@ -27,6 +29,17 @@ const READ: Record<string, string> = {
   hh_db: "HH is strongest from rough or wet ground and buildings. Rain and soil moisture move all classes together; a jump in one class only points at a surface change there.",
   cum_disp_cm: "Line-of-sight motion accumulated since the first Pass (positive: toward the satellite). A step at the event that differs between classes is motion caused by the event; slow common drifts are the reference choice and atmosphere.",
 };
+
+const WET = ["Open water", "Flooded vegetation"];
+
+/** Class areas through time as chart lines in km², plus "All water" when a Model maps both kinds of water. */
+function areaLines(r: ClassArea) {
+  const km2 = (row: ClassArea["rows"][number], vs: number[]) => vs.reduce((t, v) => t + (row.area_ha[String(v)] ?? 0), 0) / 100;
+  const lines = r.classes.map((c) => ({ label: c.label, color: c.color, points: r.rows.map((row) => ({ date: row.date, value: km2(row, [c.value]) })) }));
+  const wet = r.classes.filter((c) => WET.includes(c.label)).map((c) => c.value);
+  if (wet.length > 1) lines.unshift({ label: "All water", color: "#e2e8f0", points: r.rows.map((row) => ({ date: row.date, value: km2(row, wet) })) });
+  return lines;
+}
 
 function boxPolygon([w, s, e, n]: number[]): GeoPolygon {
   return { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] };
@@ -44,6 +57,8 @@ export default function ResearchPlots({ m, print, onReady }: { m: Manifest; prin
   const [change, setChange] = useState<ChangeByDate | null | undefined>(undefined);
   const [agree, setAgree] = useState<Agreement | null | undefined>(undefined);
   const [area, setArea] = useState<Timeseries | null | undefined>(undefined);
+  const hasPulse = !!split && split.dates.length > 1;
+  const [pulse, setPulse] = useState<ClassArea | null | undefined>(undefined);
   const [imgDone, setImgDone] = useState(!hasAgreement);
 
   useEffect(() => {
@@ -55,13 +70,14 @@ export default function ResearchPlots({ m, print, onReady }: { m: Manifest; prin
           .catch(() => setByClass((s) => ({ ...s, [v]: null })));
     if (hasDhv) fetchChangeByDate(m.id, "dhv", 3, ctl.signal).then(setChange).catch(() => setChange(null));
     if (hasAgreement) fetchAgreement(m.id, ctl.signal).then(setAgree).catch(() => setAgree(null));
+    if (hasPulse) fetchClassArea(m.id, ctl.signal).then(setPulse).catch(() => setPulse(null));
     if (m.series[0]) fetchAreaSeries(m.id, m.series[0].variable, boxPolygon(m.bbox), ctl.signal).then(setArea).catch(() => setArea(null));
     return () => ctl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [m.id]);
 
   const done =
-    (!split || variables.every((v) => v in byClass)) && (!hasDhv || change !== undefined) && (!hasAgreement || (agree !== undefined && imgDone)) && (!m.series[0] || area !== undefined);
+    (!split || variables.every((v) => v in byClass)) && (!hasDhv || change !== undefined) && (!hasAgreement || (agree !== undefined && imgDone)) && (!m.series[0] || area !== undefined) && (!hasPulse || pulse !== undefined);
   useEffect(() => {
     if (done) onReady?.();
   }, [done, onReady]);
@@ -78,6 +94,24 @@ export default function ResearchPlots({ m, print, onReady }: { m: Manifest; prin
         <p className={P}>Each bar is one Pass (12 days apart). Colour: the calibrated collection it comes from. Height: how much of the area had valid data that day (low bars mean water, steep slopes or swath edges were masked).</p>
         <div className="mt-2"><PassTimeline passes={m.passes} coverage={coverage} eventDate={m.event_date} width={W} /></div>
       </section>
+
+      {pulse && pulse.rows.length > 1 && (() => {
+        const lines = areaLines(pulse);
+        const main = lines[0];
+        const peak = main.points.reduce((a, b) => (b.value > a.value ? b : a), main.points[0]);
+        const low = main.points.reduce((a, b) => (b.value < a.value ? b : a), main.points[0]);
+        const isWater = pulse.classes.some((c) => WET.includes(c.label));
+        return (
+          <section className="break-inside-avoid">
+            <h3 className={H}>{isWater ? "The flood pulse: water through the season" : "Each class through time"}</h3>
+            <p className={P}>
+              Area of each class of &ldquo;{pulse.label}&rdquo; on every Pass, in km². {main.label} peaks on {longDate(peak.date)} ({peak.value.toFixed(0)} km²) and is lowest on {longDate(low.date)} ({low.value.toFixed(0)} km²).
+              {isWater && " A real flood pulse rises and falls smoothly over weeks; a peak on the very first Pass, or jumps between neighbouring Passes, usually mean the Model is reacting to something else (wind on water, wet soil, a new look angle). Compare with optical images on clear days."}
+            </p>
+            <div className="mt-2"><MultiLineChart width={W} still={print} unit="km²" eventDate={m.event_date} lines={lines} /></div>
+          </section>
+        );
+      })()}
 
       {split &&
         variables.map((v) => {

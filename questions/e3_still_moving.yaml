@@ -1,0 +1,47 @@
+id: e3_still_moving
+title: "Is the ground still moving?"
+topic: "Still moving"
+short: "Ground that keeps moving after the earthquake: afterslip on the fault, settling ground or slow landslides."
+lens: earthquake
+recipe: still_moving
+order: 3
+evidence: [post_vel_cm_month, post_coherence]
+context: [places]
+thresholds:
+  amber_cm_month: 1    # 12 cm a year: about twice the noise of 7 tropical Passes (team choice)
+  red_cm_month: 3      # 36 cm a year: a slope or block clearly still moving
+  min_coherence: 0.3
+  radius_m: 500
+  min_share: 10
+classes:
+  - value: 1
+    label: "Steady"
+    color: "#2c7bb6"
+    verdict: good
+    meaning: "The ground has stopped moving since the earthquake, within what the radar can measure."
+    solutions: [check_each_pass]
+  - value: 2
+    label: "Slow movement"
+    color: "#fdae61"
+    verdict: caution
+    meaning: "The ground still creeps a little each month: afterslip near the fault, settling fill or a slow slope."
+    solutions: [check_each_pass, crack_gauges]
+  - value: 3
+    label: "Still moving"
+    color: "#d7191c"
+    verdict: bad
+    meaning: "The ground moves 3 cm a month or more since the earthquake: a sliding slope or a block still adjusting."
+    solutions: [crack_gauges, slope_check_before_rain, site_study_first]
+  - value: 4
+    label: "Not enough radar data"
+    color: "#9ca3af"
+    verdict: unknown
+    meaning: "The radar signal after the earthquake is too weak here to measure a speed."
+    solutions: [more_data_needed]
+sources:
+  - "Bürgmann, R. et al. (2002). Time-dependent distributed afterslip on and deep below the Izmit earthquake rupture. BSSA 92(1)"
+  - "Lacroix, P. et al. (2020). Life and death of slow-moving landslides. Nature Reviews Earth & Environment 1, 404-419"
+limits:
+  - "Speed is along the radar's line of sight only, from a straight line through the Passes since the earthquake: a slowing afterslip looks like an average."
+  - "A few months of data in the tropics carry atmospheric noise of a few millimetres a Pass; speeds under about 1 cm a month are not meaningful."
+status: prototype

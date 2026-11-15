@@ -14,7 +14,17 @@ Wildfire (from GCOV, the burn map and the elevation model), on a 60 m grid:
   edge_upstream      1 where part of the catchment lies beyond the edge of the map, so upstream shares are partial
   dhv60, dhh60       HV and HH change between the last two Passes on 60 m blocks (dB): what changed (A9)
 
-Everything here is physics or rules on measured layers; no Model runs (ADR-0001, ADR-0005).
+Earthquake (from the GUNW pairs, the elevation model and, on a Showcase Site, the damage Model's map), on the GUNW grid:
+  strain_cm_km       how sharply the ground was bent or torn by the earthquake: gradient of the event pair's motion
+                     after a 400 m median smoothing (cm of line-of-sight motion per km)
+  post_vel_cm_month  line-of-sight speed since the earthquake, a straight-line fit through the Passes after it
+  post_coherence     mean coherence of the pairs after the earthquake (how reliable the speed is)
+  damage_class       0 low, 1 elevated, 2 high damage likelihood: the AI Model's map where installed, else the
+                     coherence-loss Baseline rule
+  slope80            terrain slope (degrees), averaged onto this grid
+
+Everything here is physics or rules on measured layers; no Model runs (ADR-0001, ADR-0005). The earthquake damage
+class is the one place a Model's own output is read, as a Showcase Site's evidence (its card states the score).
 """
 from __future__ import annotations
 
@@ -65,6 +75,23 @@ LAYERS.update({
         "colormap": "viridis",
         "range": [0, 1],
         "what_this_shows": "Share of the vegetation scattering (HV) lost in the fire (median before it minus the median of the Passes after it, except the last two) that has returned by the last two Passes, on burned 60 m blocks. Negative means it is still falling. Autumn rain can raise it without regrowth.",
+    },
+})
+
+LAYERS.update({
+    "strain_cm_km": {
+        "label": "Ground bent or torn by the earthquake",
+        "unit": "cm/km",
+        "colormap": "magma",
+        "range": [0, 40],
+        "what_this_shows": "How fast the earthquake's ground motion (line of sight) changes from place to place, after smoothing over 400 m. Large values mean the ground was stretched, bent or torn: foundations, pipes and roads suffer there even without shaking damage. Blank where the radar lost the signal (often right on the fault).",
+    },
+    "post_vel_cm_month": {
+        "label": "Ground still moving since the earthquake",
+        "unit": "cm/month",
+        "colormap": "rdbu",
+        "range": [-4, 4],
+        "what_this_shows": "Line-of-sight speed from a straight-line fit through every Pass after the earthquake (red: away from the satellite, blue: toward it). Ongoing motion after a quake is afterslip on the fault, settling of loose ground or a slow landslide.",
     },
 })
 
@@ -424,4 +451,97 @@ def wildfire(site_id: str, m: dict, site: dict, log=print) -> dict:
         "layers": [entry("mud_upstream_ha", [last], kind="physics", status="prototype"), entry("hv_recovery", [last], kind="physics", status="prototype")],
         "hidden": ["burned_share", "steep_burned_share", "drainage_ha"],
         "stats": {"burned_steep_ha": round(float(np.nansum(steep_burned) * cell_ha)), "burn_source": burn_l["id"]},
+    }
+
+
+# ---------------------------------------------------------------- earthquake
+
+EQ_SMOOTH = 5            # pixels: the event pair's motion is median-smoothed over 5 x 5 (400 m at 80 m) before the gradient
+EQ_MIN_POST = 3          # Passes after the earthquake needed for a speed
+EQ_BASELINE = (0.25, 0.4)  # coherence loss for elevated / high damage when no Model is installed (team choice)
+
+
+def _onto(site_id: str, layer_id: str, date: str, grid: dict, categorical: bool) -> np.ndarray:
+    """A layer resampled onto `grid` (nearest for classes, average for values)."""
+    from rasterio.warp import Resampling, reproject
+
+    from .export import _transform
+
+    out = np.full(grid["shape"], 255 if categorical else np.nan, np.uint8 if categorical else np.float32)
+    with rasterio.open(config.data.local_path(f"{site_id}/layers/{layer_id}_{date}.tif")) as src:
+        reproject(rasterio.band(src, 1), out, dst_transform=_transform(grid), dst_crs=f"EPSG:{grid['epsg']}",
+                  dst_nodata=255 if categorical else np.nan, resampling=Resampling.nearest if categorical else Resampling.average)
+    return out
+
+
+def earthquake(site_id: str, m: dict, site: dict, log=print) -> dict:
+    event = m.get("event_date") or site.get("event_date")
+    disp_l, cum_l, coh_l = layer(m, "disp_cm"), layer(m, "cum_disp_cm"), layer(m, "coherence")
+    loss_l = layer(m, "coherence_loss")
+    if not (event and disp_l and cum_l and loss_l):
+        raise RuntimeError("needs an event date and the GUNW layers disp_cm, cum_disp_cm and coherence_loss")
+    co = loss_l["dates"][0]  # second date of the pair that spans the earthquake
+    grid = grid_of(config.data.local_path(f"{site_id}/layers/disp_cm_{co}.tif"))
+    last = cum_l["dates"][-1]
+
+    # bent or torn ground: gradient of the smoothed event-pair motion
+    d = smooth(read(site_id, "disp_cm", co), EQ_SMOOTH)
+    gy, gx = np.gradient(d, grid["res"] / 1000)
+    strain = np.hypot(gx, gy).astype(np.float32)
+
+    # still moving: straight line through the cumulative motion of the Passes after the earthquake
+    post = [x for x in cum_l["dates"] if x > co]
+    vel = np.full(grid["shape"], np.nan, np.float32)
+    if len(post) >= EQ_MIN_POST:
+        base = read(site_id, "cum_disp_cm", co)
+        y = np.stack([read(site_id, "cum_disp_cm", x) - base for x in post])
+        t = np.array([_years(co, x) * 12 for x in post], np.float64)  # months
+        ok = np.isfinite(y)
+        n = ok.sum(0)
+        tt = np.where(ok, t[:, None, None], np.nan)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            import warnings
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                tm, ym = np.nanmean(tt, 0), np.nanmean(y, 0)
+                vel = (np.nansum((tt - tm) * (y - ym), 0) / np.nansum((tt - tm) ** 2, 0)).astype(np.float32)
+        vel[n < EQ_MIN_POST] = np.nan
+        vel = smooth(vel, 3).astype(np.float32)
+        vel[n < EQ_MIN_POST] = np.nan
+    after = [x for x in (coh_l["dates"] if coh_l else []) if x > co]
+    post_coh = (np.nanmean(np.stack([read(site_id, "coherence", x) for x in after]), 0).astype(np.float32)
+                if after else np.full(grid["shape"], np.nan, np.float32))
+
+    # damage likelihood: the AI Model's class map where installed, else the coherence-loss rule
+    pred_l = layer(m, "pred_earthquake")
+    if pred_l and pred_l["kind"] == "prediction":
+        dmg = _onto(site_id, "pred_earthquake", pred_l["dates"][-1], grid, categorical=True).astype(np.float32)
+        dmg[dmg == 255] = np.nan
+        source = "pred_earthquake"
+    else:
+        loss = read(site_id, "coherence_loss", co)
+        with np.errstate(invalid="ignore"):
+            dmg = np.where(np.isfinite(loss), (loss >= EQ_BASELINE[0]).astype(np.float32) + (loss >= EQ_BASELINE[1]), np.nan).astype(np.float32)
+        source = "coherence_loss"
+    slope_l = layer(m, "slope")
+    slope = _onto(site_id, "slope", slope_l["dates"][-1], grid, categorical=False) if slope_l else np.full(grid["shape"], np.nan, np.float32)
+
+    out = {"strain_cm_km": strain, "post_vel_cm_month": vel, "post_coherence": post_coh, "damage_class": dmg, "slope80": slope}
+    shown = ["strain_cm_km", "post_vel_cm_month"]
+    for name, arr in out.items():
+        export.write_cog(site_id, f"{name}_{last}", arr, grid, sub="layers" if name in shown else "evidence")
+    fs, fv = np.isfinite(strain), np.isfinite(vel)
+    sp = (np.nanmedian(strain[fs]), np.nanpercentile(strain[fs], 99)) if fs.any() else (float("nan"),) * 2
+    vp = np.nanpercentile(np.abs(vel[fv]), 95) if fv.any() else float("nan")
+    log(f"  evidence: strain p50 {sp[0]:.1f}, p99 {sp[1]:.1f} cm/km; {len(post)} Passes after the quake, |speed| p95 {vp:.2f} cm/month; "
+        f"damage from {source}")
+    return {
+        "date": last,
+        "co_date": co,
+        "grid": grid,
+        "layers": [entry(n, [last], kind="physics", status="prototype") for n in shown],
+        "hidden": ["post_coherence", "damage_class", "slope80"],
+        "stats": {"damage_source": source, "co_event_date": co, "post_passes": len(post),
+                  "strain_p99_cm_km": round(float(sp[1]), 1) if fs.any() else None},
     }

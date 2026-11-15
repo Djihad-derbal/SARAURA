@@ -1,5 +1,6 @@
 id: m3_better_plots
 title: "Are there better plots nearby?"
+topic: "Better plots nearby"
 short: "Click a spot: the steadiest ground within 2 km, ranked."
 lens: subsidence
 recipe: better_plots

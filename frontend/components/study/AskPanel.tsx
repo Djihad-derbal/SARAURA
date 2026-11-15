@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchAnswers, fetchAnswersAt, fetchPlaces, type AnswerCard, type Answers, type AnswersAt, type Place, type Question, type Solution, type Verdict } from "@/lib/api";
+import { fetchAnswers, fetchAnswersAt, fetchPlaces, type AnswerCard, type Answers, type AnswersAt, type Measure, type NearPlace, type Place, type Question, type Solution, type Verdict } from "@/lib/api";
 import { ha } from "@/lib/style";
 
 type Spot = { lon: number; lat: number };
@@ -48,6 +48,59 @@ export function useAnswers(studyId: string, probe: Spot | null) {
 
 function Swatch({ color, size = "h-3 w-3" }: { color: string | null; size?: string }) {
   return <span className={`inline-block ${size} shrink-0 rounded-sm border border-white/20`} style={{ background: color ?? "transparent" }} aria-hidden />;
+}
+
+const SEVERITY: Record<Verdict, number> = { bad: 0, caution: 1, unknown: 2, good: 3 };
+const COST_ORDER: Record<Solution["cost"], number> = { low: 0, medium: 1, high: 2 };
+const severity = (c: AnswerCard) => (c.verdict ? SEVERITY[c.verdict] : 4);
+const topicOf = (c: { topic?: string | null; title: string }) => c.topic ?? c.title;
+const flagged = (c: AnswerCard) => c.class !== null && !!c.label && c.label !== "Nothing to flag here";
+
+/** "Khoula", or "2.7 km north of Beni Ftah" when the spot is away from any named place. */
+function placeTitle(p: NearPlace | null | undefined) {
+  if (!p) return "Your spot";
+  return p.km < 0.6 ? p.name : `${p.km.toFixed(1)} km ${p.direction} of ${p.name}`;
+}
+
+const num = (v: number) => v.toLocaleString("en-GB", { maximumFractionDigits: v < 10 ? 1 : 0 });
+
+/** The measured number against the Question's own thresholds: why this spot got its colour. */
+function Gauge({ m, color }: { m: Measure; color: string | null }) {
+  const pct = (v: number) => `${Math.min(100, Math.max(0, (v / m.max) * 100))}%`;
+  return (
+    <div className="rounded-lg bg-white/[0.04] px-3 py-2.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 truncate text-[12px] text-ink-2">{m.label}</span>
+        <span className="shrink-0 font-mono text-[13px] font-semibold text-ink">{num(m.value)}{m.unit === "%" ? "%" : ` ${m.unit}`}</span>
+      </div>
+      <div className="relative mt-2 h-2 rounded-full bg-white/10">
+        <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: pct(m.value), background: color ?? "var(--accent)" }} />
+        {m.marks.map((k) => <span key={k.at} className="absolute -top-1 -bottom-1 w-0.5 bg-ink/80" style={{ left: pct(k.at) }} aria-hidden />)}
+      </div>
+      <div className="relative mt-1 h-4 text-[10.5px] text-ink-3">
+        {m.marks.map((k) => (
+          <span key={k.at} className="absolute -translate-x-1/2 whitespace-nowrap" style={{ left: pct(k.at) }}>{num(k.at)}{m.unit === "%" ? "%" : ""} {k.label}</span>
+        ))}
+      </div>
+      <p className="sr-only">{m.label}: {num(m.value)} {m.unit}. Thresholds: {m.marks.map((k) => `${k.label} at ${num(k.at)}`).join(", ")}.</p>
+    </div>
+  );
+}
+
+/** One action list for a spot: every flagged answer's options, worst answers first, cheapest first, no repeats. */
+function mergedActions(cards: AnswerCard[], catalogue: Record<string, Solution>) {
+  const out = new Map<string, { id: string; s: Solution; topics: string[]; rank: number }>();
+  for (const c of [...cards].sort((a, b) => severity(a) - severity(b))) {
+    if (!c.verdict) continue;
+    for (const id of c.solutions) {
+      const s = catalogue[id];
+      if (!s) continue;
+      const e = out.get(id);
+      if (e) { if (!e.topics.includes(topicOf(c))) e.topics.push(topicOf(c)); continue; }
+      out.set(id, { id, s, topics: [topicOf(c)], rank: severity(c) * 10 + COST_ORDER[s.cost] });
+    }
+  }
+  return [...out.values()].sort((a, b) => a.rank - b.rank);
 }
 
 /** The answer across the whole area as one stacked bar: readable before a question is even opened. */
@@ -103,32 +156,34 @@ export function SpotBubble({ spot, busy, err, openId, onDetails, onClose }: {
 }) {
   if (err) return <p className="text-sm text-drop">{err}</p>;
   if (busy || !spot) return <div className="w-48 py-1"><div className="busy-bar h-0.5" /><p className="mt-2 text-xs text-ink-3">Reading the radar here…</p></div>;
-  const main = spot.cards.find((c) => c.question === openId) ?? spot.cards.find((c) => c.class !== null) ?? spot.cards[0];
-  const others = spot.cards.filter((c) => c !== main && c.label);
+  const main = spot.cards.find((c) => c.question === openId) ?? [...spot.cards].sort((a, b) => severity(a) - severity(b))[0];
+  const others = spot.cards.filter((c) => c !== main);
+  const raised = others.filter(flagged).sort((a, b) => severity(a) - severity(b));
+  const quiet = others.length - raised.length;
   return (
-    <div className="w-56 sm:w-64">
+    <div className="w-60 sm:w-64">
       <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 truncate text-[11px] leading-snug text-ink-3 sm:whitespace-normal">{main.title}</p>
+        <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-ink">{placeTitle(spot.place)}</p>
         <button type="button" onClick={onClose} aria-label="Close" className="-mr-1 -mt-1 cursor-pointer px-1 text-ink-3 hover:text-ink">×</button>
       </div>
-      <div className="mt-1 flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ background: `${main.color ?? "#9ca3af"}26` }}>
+      <p className="mt-1 text-[11px] uppercase tracking-wide text-ink-3">{topicOf(main)}</p>
+      <div className="mt-0.5 flex items-center gap-2 rounded-lg px-2 py-1.5" style={{ background: `${main.color ?? "#9ca3af"}26` }}>
         <Swatch color={main.color} size="h-3.5 w-3.5" />
-        <span className="text-[15px] font-semibold leading-tight text-ink">{main.label ?? "No answer here"}</span>
+        <span className="text-[14px] font-semibold leading-tight text-ink">{main.label ?? "No answer here"}</span>
       </div>
-      {main.reasons[1] && <p className="mt-1.5 hidden text-xs leading-snug text-ink-2 sm:block">{main.reasons[1]}</p>}
-      {!!others.length && (
-        <ul className="mt-2 hidden flex-col gap-0.5 border-t border-line pt-1.5 sm:flex">
-          {others.slice(0, 3).map((c) => (
+      {(raised.length > 0 || quiet > 0) && (
+        <ul className="mt-2 hidden flex-col gap-1 border-t border-line pt-1.5 sm:flex">
+          {raised.slice(0, 3).map((c) => (
             <li key={c.question} className="flex items-start gap-1.5 text-[11.5px] leading-snug" title={c.title}>
-              <span className="mt-px grid h-4 w-4 shrink-0 place-items-center rounded-full bg-white/10 font-mono text-[10px] text-ink-3">{spot.cards.indexOf(c) + 1}</span>
               <Swatch color={c.color} size="mt-0.5 h-2.5 w-2.5" />
-              <span className="min-w-0 flex-1 text-ink-2">{c.label}</span>
+              <span className="min-w-0 flex-1"><span className="text-ink-3">{topicOf(c)}:</span> <span className="text-ink-2">{c.label}</span></span>
             </li>
           ))}
+          {quiet > 0 && <li className="text-[11.5px] text-ink-3">{quiet === others.length ? "Other questions" : `${quiet} other question${quiet > 1 ? "s" : ""}`}: nothing to flag</li>}
         </ul>
       )}
       <button type="button" onClick={onDetails} className="mt-2 w-full cursor-pointer rounded-lg bg-accent px-2 py-1.5 text-xs font-medium text-[#04111a] transition-opacity duration-200 hover:opacity-90">
-        Why, and what to do →
+        Everything here, and what to do →
       </button>
     </div>
   );
@@ -186,7 +241,7 @@ export function PlaceSearch({ studyId, onPick, placeholder }: { studyId: string;
 
 // ---------------------------------------------------------------- the answer at the clicked spot (sidebar)
 
-function SpotCard({ card, catalogue, onGo }: { card: AnswerCard; catalogue: Record<string, Solution>; onGo: (s: Spot) => void }) {
+function SpotCard({ card, onGo }: { card: AnswerCard; onGo: (s: Spot) => void }) {
   return (
     <div className="overflow-hidden rounded-xl border border-line" id="spot-card">
       <div className="flex items-center gap-2 px-3 py-2.5" style={{ background: `${card.color ?? "#9ca3af"}2e` }}>
@@ -198,6 +253,7 @@ function SpotCard({ card, catalogue, onGo }: { card: AnswerCard; catalogue: Reco
         {card.verdict && <span className="shrink-0 rounded-full bg-black/30 px-2 py-0.5 text-[11px] text-ink-2">{VERDICT_TEXT[card.verdict]}</span>}
       </div>
       <div className="flex flex-col gap-3 p-3">
+        {card.measure && <Gauge m={card.measure} color={card.color} />}
         {!!card.reasons.length && (
           <div>
             <p className="mb-1 text-[11px] uppercase tracking-wide text-ink-3">Why</p>
@@ -226,15 +282,31 @@ function SpotCard({ card, catalogue, onGo }: { card: AnswerCard; catalogue: Reco
             </ol>
           </div>
         )}
-        {!!card.solutions.length && (
-          <div>
-            <p className="mb-1 text-[11px] uppercase tracking-wide text-ink-3">What you can do</p>
-            <Options ids={card.solutions} catalogue={catalogue} />
-          </div>
-        )}
+        {!!card.solutions.length && <p className="text-[12px] text-ink-3">What to do here is listed in the card above, with every question&rsquo;s options together.</p>}
       </div>
     </div>
   );
+}
+
+/** "Ranked by …": the first number column the list is actually sorted by (checked, not assumed). */
+function rankedBy(q: Question) {
+  const r = q.ranked;
+  if (!r || r.rows.length < 3) return null;
+  for (const c of r.columns.slice(1)) {
+    const v = r.rows.map((x) => x[c.key]).filter((x): x is number => typeof x === "number");
+    if (v.length !== r.rows.length) continue;
+    if (v.every((x, i) => i === 0 || x <= v[i - 1])) return `most ${c.label.toLowerCase()} first`;
+    if (v.every((x, i) => i === 0 || x >= v[i - 1])) return `least ${c.label.toLowerCase()} first`;
+  }
+  return null;
+}
+
+/** One list cell in plain words: "hamlet", "81% basin burned and steep", "15.5 ha burned steep upstream". */
+function cell(c: { key: string; label: string; unit?: string }, v: string | number | undefined) {
+  if (v === undefined || v === null || v === "") return null;
+  if (c.key === "kind" || c.key === "type") return String(v);
+  const n = typeof v === "number" ? num(v) : v;
+  return c.unit === "%" ? `${n}% ${c.label.toLowerCase()}` : `${n}${c.unit ? ` ${c.unit}` : ""} ${c.label.toLowerCase()}`;
 }
 
 function QuestionBody({ q, doc, spot, spotBusy, onGo }: { q: Question; doc: Answers; spot: AnswersAt | null; spotBusy: boolean; onGo: (s: Spot) => void }) {
@@ -246,7 +318,7 @@ function QuestionBody({ q, doc, spot, spotBusy, onGo }: { q: Question; doc: Answ
         <AnimatePresence mode="wait">
           <motion.div key={`${card.question}|${card.label}|${card.reasons.join("|").length}`} initial={{ opacity: 0, y: 10, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0 }} transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}>
-            <SpotCard card={card} catalogue={doc.solutions} onGo={onGo} />
+            <SpotCard card={card} onGo={onGo} />
           </motion.div>
         </AnimatePresence>
       ) : (
@@ -259,6 +331,7 @@ function QuestionBody({ q, doc, spot, spotBusy, onGo }: { q: Question; doc: Answ
       <div>
         <p className="mb-1.5 text-[11px] uppercase tracking-wide text-ink-3">Across the whole area</p>
         <p className="text-[13px] leading-relaxed text-ink-2">{q.headline}</p>
+        {!!q.classes.length && <p className="mt-2 text-[11px] text-ink-3">Ground this question marks, by answer (bar: share of the marked ground)</p>}
         {!!q.classes.length && (
           <ul className="mt-2 flex flex-col gap-1">
             {q.classes.map((c) => (
@@ -270,7 +343,7 @@ function QuestionBody({ q, doc, spot, spotBusy, onGo }: { q: Question; doc: Answ
                     <span className="w-24 shrink-0">
                       <span className="block h-1.5 overflow-hidden rounded-full bg-white/10"><span className="block h-full" style={{ width: `${Math.max(2, c.share * 100)}%`, background: c.color }} /></span>
                     </span>
-                    <span className="w-9 shrink-0 text-right font-mono text-xs text-ink-3">{(c.share * 100).toFixed(0)}%</span>
+                    <span className="w-[72px] shrink-0 text-right font-mono text-xs text-ink-3" title={`${(c.share * 100).toFixed(0)}% of the marked ground`}>{ha(c.area_ha)}</span>
                   </summary>
                   <div className="mt-2 pl-5">
                     <p className="text-[13px] text-ink-2">{c.meaning} <span className="text-ink-3">({ha(c.area_ha)})</span></p>
@@ -285,7 +358,8 @@ function QuestionBody({ q, doc, spot, spotBusy, onGo }: { q: Question; doc: Answ
 
       {q.ranked && q.ranked.rows.length > 0 && (
         <div>
-          <p className="mb-1 text-[11px] uppercase tracking-wide text-ink-3">{q.ranked.title}</p>
+          <p className="text-[11px] uppercase tracking-wide text-ink-3">{q.ranked.title}</p>
+          {rankedBy(q) && <p className="mb-1 text-[11px] text-ink-3">Ranked {rankedBy(q)}</p>}
           <ol className="flex flex-col">
             {q.ranked.rows.slice(0, rows).map((r, i) => {
               const [first, ...rest] = q.ranked!.columns;
@@ -297,7 +371,7 @@ function QuestionBody({ q, doc, spot, spotBusy, onGo }: { q: Question; doc: Answ
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm text-ink">{String(r[first.key] ?? "")}</span>
                       <span className="line-clamp-2 block text-xs leading-snug text-ink-3">
-                        {rest.map((c) => `${c.label}: ${typeof r[c.key] === "number" ? (r[c.key] as number).toLocaleString("en-GB", { maximumFractionDigits: 1 }) : r[c.key]}${c.unit ? ` ${c.unit}` : ""}`).join(" · ")}
+                        {rest.map((c) => cell(c, r[c.key])).filter(Boolean).join(" · ")}
                       </span>
                     </span>
                     <span className="shrink-0 text-xs text-ink-3" aria-hidden>→</span>
@@ -326,9 +400,124 @@ function QuestionBody({ q, doc, spot, spotBusy, onGo }: { q: Question; doc: Answ
   );
 }
 
+// ---------------------------------------------------------------- one card for the picked spot: every answer, one action list
+
+function VillageCard({ spot, busy, doc, shown, openId, onOpen, onGo, onClear }: {
+  spot: AnswersAt | null; busy: boolean; doc: Answers; shown: Question[]; openId: string | null;
+  onOpen: (q: Question | null) => void; onGo: (s: Spot) => void; onClear: () => void;
+}) {
+  const [allActions, setAllActions] = useState(false);
+  if (busy || !spot) {
+    return (
+      <div className="rounded-2xl border border-accent/40 bg-accent/[0.05] p-4" aria-busy="true">
+        <div className="busy-bar h-0.5" />
+        <p className="mt-2 text-xs text-ink-3">Reading the radar at this spot…</p>
+      </div>
+    );
+  }
+  const byQ = new Map(spot.cards.map((c) => [c.question, c]));
+  const rows = shown.map((q) => ({ q, c: byQ.get(q.id) })).filter((r): r is { q: Question; c: AnswerCard } => !!r.c);
+  const worst = [...rows].sort((a, b) => severity(a.c) - severity(b.c))[0];
+  // the gauge explains the open question here, else the most serious flagged one that has a measured number
+  const gaugeRow = rows.find((r) => r.q.id === openId && r.c.measure) ?? [...rows].filter((r) => r.c.measure && flagged(r.c)).sort((a, b) => severity(a.c) - severity(b.c))[0];
+  const actions = mergedActions(rows.map((r) => r.c), doc.solutions);
+  const shownActions = allActions ? actions : actions.slice(0, 3);
+  // step through the open question's ranked list (villages, roads, segments) from here
+  const openQ = shown.find((q) => q.id === openId) ?? null;
+  const ranked = openQ?.ranked?.rows ?? [];
+  const at = ranked.length ? ranked.reduce((best, r, i) => {
+    const d = Math.hypot((r.lon - spot.lon) * Math.cos((spot.lat * Math.PI) / 180), r.lat - spot.lat);
+    return d < best.d ? { i, d } : best;
+  }, { i: -1, d: 0.004 }).i : -1; // within about 400 m counts as "this item"
+  const step = (d: 1 | -1) => {
+    if (!ranked.length) return;
+    const i = at < 0 ? (d === 1 ? 0 : ranked.length - 1) : (at + d + ranked.length) % ranked.length;
+    onGo({ lon: ranked[i].lon, lat: ranked[i].lat });
+  };
+  return (
+    <section id="village-card" aria-label={`Everything about ${placeTitle(spot.place)}`}
+      className="overflow-hidden rounded-2xl border bg-white/[0.03]" style={{ borderColor: `${worst?.c.color ?? "#94a3b8"}66` }}>
+      <div className="h-1" style={{ background: worst?.c.color ?? "transparent" }} aria-hidden />
+      <div className="p-4">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] uppercase tracking-wide text-ink-3">{spot.place && spot.place.km < 0.6 ? spot.place.kind || "Place" : "Your spot"}</p>
+            <h3 className="font-display text-xl font-semibold leading-tight text-ink">{placeTitle(spot.place)}</h3>
+            {spot.place?.local && spot.place.local !== spot.place.name && spot.place.km < 0.6 && <p className="text-xs text-ink-3" dir="auto">{spot.place.local}</p>}
+          </div>
+          {ranked.length > 0 && (
+            <div className="flex shrink-0 items-center gap-1 text-xs text-ink-3">
+              <button type="button" onClick={() => step(-1)} aria-label="Previous in the list" className="grid h-7 w-7 cursor-pointer place-items-center rounded-lg border border-line hover:text-ink">‹</button>
+              <span className="min-w-[48px] text-center font-mono" title={openQ?.ranked?.title}>{at >= 0 ? `${at + 1} of ${ranked.length}` : `– of ${ranked.length}`}</span>
+              <button type="button" onClick={() => step(1)} aria-label="Next in the list" className="grid h-7 w-7 cursor-pointer place-items-center rounded-lg border border-line hover:text-ink">›</button>
+            </div>
+          )}
+          <button type="button" onClick={onClear} aria-label="Clear this spot" className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-lg text-ink-3 hover:text-ink">✕</button>
+        </div>
+
+        <ul className="mt-3 flex flex-col">
+          {rows.map(({ q, c }) => (
+            <li key={q.id}>
+              <button type="button" onClick={() => onOpen(q)} aria-current={q.id === openId}
+                className={`flex w-full cursor-pointer items-center gap-2.5 border-t border-line py-2 text-left transition-colors duration-150 first:border-0 hover:bg-white/[0.04] ${q.id === openId ? "text-ink" : ""}`}>
+                <Swatch color={c.color ?? (flagged(c) ? null : "#334155")} size="h-3 w-3" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12px] text-ink-3">{topicOf(q)}</span>
+                  <span className={`block text-[13.5px] leading-snug ${flagged(c) ? "text-ink" : "text-ink-3"}`}>{c.label ?? "No answer here"}</span>
+                </span>
+                {c.verdict && <span className="shrink-0 rounded-full bg-black/30 px-2 py-0.5 text-[11px] text-ink-2">{VERDICT_TEXT[c.verdict]}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {gaugeRow?.c.measure && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[11px] uppercase tracking-wide text-ink-3">Why: {topicOf(gaugeRow.q).toLowerCase()}</p>
+            <Gauge m={gaugeRow.c.measure} color={gaugeRow.c.color} />
+          </div>
+        )}
+
+        <div className="mt-4">
+          <p className="mb-1.5 text-[11px] uppercase tracking-wide text-ink-3">What to do here, in order</p>
+          {actions.length ? (
+            <>
+              <ol className="flex flex-col gap-1.5">
+                {shownActions.map((a, i) => (
+                  <li key={a.id}>
+                    <details className="group rounded-lg border border-line bg-black/20 px-2.5 py-2">
+                      <summary className="flex cursor-pointer list-none items-center gap-2">
+                        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-white/10 font-mono text-[11px] text-ink-2">{i + 1}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm leading-snug text-ink">{a.s.title}</span>
+                          <span className="block text-[11px] text-ink-3">for {a.topics.join(" and ").toLowerCase()}</span>
+                        </span>
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] ${COST_STYLE[a.s.cost]}`}>{a.s.cost}</span>
+                        <span className="shrink-0 text-xs text-ink-3 transition-transform duration-200 group-open:rotate-90" aria-hidden>›</span>
+                      </summary>
+                      <p className="mt-2 text-[13px] leading-relaxed text-ink-2">{a.s.what}</p>
+                      <p className="mt-1.5 text-xs text-ink-3"><span className="text-ink-2">Check first:</span> {a.s.check}</p>
+                      <p className="mt-0.5 text-[11px] text-ink-3">Source: {a.s.source}</p>
+                    </details>
+                  </li>
+                ))}
+              </ol>
+              {actions.length > 3 && (
+                <button type="button" onClick={() => setAllActions((v) => !v)} className="mt-1.5 cursor-pointer text-xs text-accent hover:underline">
+                  {allActions ? "Show fewer" : `Show ${actions.length - 3} more`}
+                </button>
+              )}
+            </>
+          ) : <p className="text-[13px] text-ink-3">Nothing to act on here for these questions.</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------- the panel
 
-export default function AskPanel({ doc, spot, spotBusy, spotErr, role, onRole, openId, onOpen, onGo, scrollKey }: {
+export default function AskPanel({ doc, spot, spotBusy, spotErr, role, onRole, openId, onOpen, onGo, onClear, scrollKey }: {
   doc: Answers;
   spot: AnswersAt | null;
   spotBusy: boolean;
@@ -339,6 +528,8 @@ export default function AskPanel({ doc, spot, spotBusy, spotErr, role, onRole, o
   openId: string | null;
   onOpen: (q: Question | null) => void;
   onGo: (s: Spot) => void;
+  /** Forget the picked spot (closes its card and the map bubble). */
+  onClear: () => void;
   /** Changes when the spot card should be scrolled into view (e.g. "Why, and what to do" in the bubble). */
   scrollKey: number;
 }) {
@@ -350,9 +541,10 @@ export default function AskPanel({ doc, spot, spotBusy, spotErr, role, onRole, o
     return r.questions.map((id) => byId.get(id)).filter((q): q is Question => !!q);
   }, [doc, role]);
   const openRef = useRef<HTMLLIElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion() ?? false;
   useEffect(() => {
-    if (scrollKey) openRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (scrollKey) (cardRef.current ?? openRef.current)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [scrollKey]);
 
   if (role === null) {
@@ -386,7 +578,11 @@ export default function AskPanel({ doc, spot, spotBusy, spotErr, role, onRole, o
         <button type="button" onClick={() => onRole(null)} className="ml-auto cursor-pointer text-xs text-accent hover:underline">change</button>
       </div>
       {!known && <p className="mt-2 text-xs text-ink-3">That role is not used for this place, so every question is shown.</p>}
-      <p className="mt-3 text-xs text-ink-3">Open a question, then tap the map or search a place for the answer there.</p>
+      {spot || spotBusy ? (
+        <div ref={cardRef} className="mt-3 scroll-mt-3">
+          <VillageCard spot={spot} busy={spotBusy} doc={doc} shown={shown} openId={openId} onOpen={onOpen} onGo={onGo} onClear={onClear} />
+        </div>
+      ) : <p className="mt-3 text-xs text-ink-3">Tap a village, a road or any spot on the map, or search a place, to see every answer there and what to do.</p>}
       {spotErr && <p className="mt-2 text-sm text-drop" role="alert">{spotErr}</p>}
       <ul className="mt-3 flex flex-col gap-2">
         {shown.map((q, i) => {

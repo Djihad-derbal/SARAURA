@@ -814,8 +814,200 @@ def since_last_pass(ctx: dict, q: dict) -> dict:
     }
 
 
+# ---------------------------------------------------------------- earthquake recipes
+
+PLACE_KINDS = ("city", "town", "village", "suburb", "neighbourhood", "quarter", "hamlet")
+
+
+def _place_rows(ctx: dict, arr: np.ndarray, radius_m: float, measure):
+    """One row per named place: `measure(window_values, window_mask)` over a disc around it; duplicates by name dropped."""
+    geo, rows, seen = ctx["geo"], [], set()
+    rad = max(1, int(round(radius_m / geo.g["res"])))
+    k = disc(rad)
+    for props, lon, lat in points_of(geo, ctx["places"], PLACE_KINDS):
+        name = props["name"]
+        if not name or name in seen:
+            continue
+        r, c = geo.rc_lonlat(lon, lat)
+        if not geo.inside(r, c):
+            continue
+        r0, r1, c0, c1 = max(0, r - rad), r + rad + 1, max(0, c - rad), c + rad + 1
+        win = arr[r0:r1, c0:c1]
+        kk = k[(r0 - (r - rad)):(r0 - (r - rad)) + win.shape[0], (c0 - (c - rad)):(c0 - (c - rad)) + win.shape[1]]
+        row = measure((r0, r1, c0, c1), kk)
+        if row:
+            seen.add(name)
+            rows.append({"name": name, "kind": props["class"], "lon": round(lon, 5), "lat": round(lat, 5), **row})
+    return rows
+
+
+def _damage_source(ctx: dict) -> str:
+    if ctx["damage_source"] != "pred_earthquake":
+        return "the coherence-loss rule (Baseline; no AI Model installed)"
+    from .predictions import card
+
+    c = card(ctx["m"].get("model_card") or "earthquake") or {}
+    b, mo = c.get("baseline", {}), c.get("model", {})
+    if mo.get("score") is not None and b.get("score") is not None:
+        return f"the AI Model (average precision {mo['score']:.2f} against {b['score']:.2f} for the coherence-loss Baseline)"
+    return "the AI Model"
+
+
+def inspect_first(ctx: dict, q: dict) -> dict:
+    E, T = ctx["E"], q["thresholds"]
+    D = E["damage_class"]
+    cls = np.zeros(D.shape, np.uint8)
+    with np.errstate(invalid="ignore"):
+        cls[D == 1] = 1
+        cls[D == 2] = 2
+
+    def measure(w, kk):
+        win = D[w[0]:w[1], w[2]:w[3]][kk]
+        win = win[np.isfinite(win)]
+        if win.size < 10:
+            return None
+        hi, el = float(np.mean(win == 2)) * 100, float(np.mean(win == 1)) * 100
+        return {"high_share": round(hi), "elevated_share": round(el)} if hi + el >= T["min_share"] else None
+
+    rows = sorted(_place_rows(ctx, D, T["radius_m"], measure), key=lambda r: (-r["high_share"], -r["elevated_share"]))
+    cell_ha = ctx["geo"].g["res"] ** 2 / 1e4
+    hi_ha, el_ha = (cls == 2).sum() * cell_ha, (cls == 1).sum() * cell_ha
+    top = ", ".join(r["name"] for r in rows[:3])
+    return {
+        "array": cls,
+        "headline": f"{hi_ha:,.0f} ha show a high and {el_ha:,.0f} ha an elevated chance of damaged buildings, from {_damage_source(ctx)}."
+                    + (f" Check first: {top}." if top else ""),
+        "ranked": {"title": f"Places to check first (damage likelihood within {T['radius_m']:.0f} m)",
+                   "columns": [{"key": "name", "label": "Place"}, {"key": "high_share", "label": "High", "unit": "%"},
+                               {"key": "elevated_share", "label": "Elevated", "unit": "%"}],
+                   "rows": rows},
+    }
+
+
+def _rebuild_masks(E: dict, T: dict):
+    strain, slope, D = E["strain_cm_km"], E["slope80"], E["damage_class"]
+    with np.errstate(invalid="ignore"):
+        red = strain >= T["red_cm_km"]
+        amber = (strain >= T["amber_cm_km"]) | ((slope >= T["steep_deg"]) & (D >= 1))
+    return np.isfinite(strain), red, amber
+
+
+def rebuild_where(ctx: dict, q: dict) -> dict:
+    E, T = ctx["E"], q["thresholds"]
+    measured, red, amber = _rebuild_masks(E, T)
+    known = measured | np.isfinite(E["damage_class"])
+    cls = np.zeros(measured.shape, np.uint8)
+    cls[measured] = 1
+    cls[measured & amber] = 2
+    cls[measured & red] = 3
+    cls[known & ~measured] = 4
+    n = (cls >= 1).sum()
+    sh = {i: _pct((cls == i).sum(), n) for i in (1, 2, 3, 4)}
+    return {"array": cls,
+            "headline": f"{sh[3]:.1f}% of the ground was bent or torn hard enough to need a special study before rebuilding and {sh[2]:.0f}% "
+                        f"a site study (strong bending, or steep slopes with damage signs); {sh[1]:.0f}% can rebuild to the code. "
+                        f"The radar lost the signal on {sh[4]:.0f}%, often right along the fault."}
+
+
+def still_moving(ctx: dict, q: dict) -> dict:
+    E, T = ctx["E"], q["thresholds"]
+    v, coh = E["post_vel_cm_month"], E["post_coherence"]
+    sp = np.abs(v)
+    measured = np.isfinite(v)
+    with np.errstate(invalid="ignore"):
+        unknown = measured & (coh < T["min_coherence"])
+        cls = np.zeros(v.shape, np.uint8)
+        cls[measured] = 1
+        cls[measured & (sp >= T["amber_cm_month"])] = 2
+        cls[measured & (sp >= T["red_cm_month"])] = 3
+    cls[unknown] = 4
+    known = np.isfinite(E["damage_class"]) & ~measured
+    cls[known] = 4
+
+    def measure(w, kk):
+        win = cls[w[0]:w[1], w[2]:w[3]][kk]
+        ok = (win >= 1) & (win <= 3)
+        if ok.sum() < 10:
+            return None
+        mv = float(np.mean(win[ok] >= 2)) * 100
+        if mv < T["min_share"]:
+            return None
+        return {"moving_share": round(mv), "speed_cm_month": round(float(np.nanmedian(sp[w[0]:w[1], w[2]:w[3]][kk])), 1)}
+
+    rows = sorted(_place_rows(ctx, cls, T["radius_m"], measure), key=lambda r: (-r["moving_share"], -r["speed_cm_month"]))
+    n = (cls >= 1).sum()
+    sh = {i: _pct((cls == i).sum(), n) for i in (1, 2, 3, 4)}
+    npost = ctx["ev_stats"].get("post_passes", 0)
+    return {
+        "array": cls,
+        "headline": f"Since the earthquake ({npost} Passes), {sh[3]:.1f}% of the measured ground still moves {T['red_cm_month']:g} cm a month or more and "
+                    f"{sh[2]:.0f}% between {T['amber_cm_month']:g} and {T['red_cm_month']:g}; {sh[1]:.0f}% is steady and {sh[4]:.0f}% could not be measured reliably.",
+        "ranked": {"title": f"Places where the ground still moves (within {T['radius_m']:.0f} m)",
+                   "columns": [{"key": "name", "label": "Place"}, {"key": "moving_share", "label": "Moving", "unit": "%"},
+                               {"key": "speed_cm_month", "label": "Typical speed", "unit": "cm/month"}],
+                   "rows": rows},
+    }
+
+
+def lifelines_crossed(ctx: dict, q: dict) -> dict:
+    E, T, geo = ctx["E"], q["thresholds"], ctx["geo"]
+    strain, sp = E["strain_cm_km"], np.abs(E["post_vel_cm_month"])
+    cls = np.zeros(strain.shape, np.uint8)
+    names = {"subway": "Metro", "light_rail": "Light rail", "tram": "Tram", "canal": "Canal", "drain": "Drain"}
+    items = []
+    step = geo.g["res"] / 2
+    feats = [(p, xy) for fc in (ctx.get("lines"), ctx.get("roads")) if fc for p, xy in project_lines(geo, fc)]
+    for props, xy in feats:
+        pts, dist = densify(xy, step)
+        r, c = geo.rc(pts[:, 0], pts[:, 1])
+        st, vv = geo.sample(strain, r, c), geo.sample(sp, r, c)
+        seg = (dist // T["segment_m"]).astype(int)
+        for sgi in np.unique(seg):
+            mk = seg == sgi
+            s_max = float(np.nanmax(st[mk])) if np.isfinite(st[mk]).any() else float("nan")
+            v_max = float(np.nanmax(vv[mk])) if np.isfinite(vv[mk]).any() else float("nan")
+            red = (s_max >= T["red_cm_km"]) or (v_max >= T["red_cm_month"])
+            amber = (s_max >= T["amber_cm_km"]) or (v_max >= T["amber_cm_month"])
+            if not (red or amber):
+                continue
+            k = 2 if red else 1
+            j = int(np.flatnonzero(mk)[int(np.nanargmax(np.where(np.isfinite(st[mk]), st[mk], -1)))])
+            lon, lat = geo.inv.transform(pts[j, 0], pts[j, 1])
+            kind = names.get(props["class"], props["class"].replace("_", " "))
+            name = props["ref"] or props["name"] or f"Unnamed {kind.lower()}"
+            if props["ref"] and props["name"] and props["name"] != props["ref"]:
+                name = f"{props['ref']} ({props['name']})"
+            item = {"name": name, "kind": kind, "lon": round(lon, 5), "lat": round(lat, 5),
+                    "strain_cm_km": round(s_max, 1) if np.isfinite(s_max) else None,
+                    "speed_cm_month": round(v_max, 1) if np.isfinite(v_max) else None, "class": k, "coords": line_coords(geo, pts[mk])}
+            prev = items[-1] if items else None
+            if prev and prev["name"] == name and prev["class"] == k and abs(prev["lat"] - lat) + abs(prev["lon"] - lon) < 0.006:
+                prev["coords"] += item["coords"]  # merge neighbouring sections of one line
+                prev["strain_cm_km"] = max(x for x in (prev["strain_cm_km"], item["strain_cm_km"], -1) if x is not None)
+            else:
+                items.append(item)
+            rr, cc = r[mk], c[mk]
+            inb = geo.inside(rr, cc)
+            np.maximum.at(cls, (rr[inb], cc[inb]), k)
+    rank = {"Metro": 0, "Light rail": 0, "Tram": 0, "trunk": 1, "primary": 1, "trunk link": 1, "primary link": 1, "Canal": 2, "Drain": 4}
+    items.sort(key=lambda i: (-i["class"], rank.get(i["kind"], 3), -(i["strain_cm_km"] or 0)))
+    n2 = sum(i["class"] == 2 for i in items)
+    return {
+        "array": dilate(cls),
+        "items": items,
+        "headline": f"{n2} sections of road, Metro or canal cross ground that was torn or keeps moving and should be inspected before full use; "
+                    f"{len(items) - n2} more cross bent ground and need a check."
+                    + (f" The worst is {items[0]['name']} ({items[0]['kind']})." if items else ""),
+        "ranked": {"title": "Sections to inspect (500 m each)",
+                   "columns": [{"key": "name", "label": "Line or road"}, {"key": "kind", "label": "Type"},
+                               {"key": "strain_cm_km", "label": "Ground bent", "unit": "cm/km"},
+                               {"key": "speed_cm_month", "label": "Still moving", "unit": "cm/month"}],
+                   "rows": items},
+    }
+
+
 RECIPES = {f.__name__: f for f in (safe_to_build, what_to_build, better_plots, lines_at_risk, burned_slopes, roads_to_watch, replant_first, forest_recovery,
-                                   farms_burned, mud_to_water, since_last_pass)}
+                                   farms_burned, mud_to_water, since_last_pass, inspect_first, rebuild_where, still_moving, lifelines_crossed)}
 
 
 
@@ -842,6 +1034,12 @@ def build(site_id: str, log=print) -> int:
         d = ev["date"]
         ctx["E"] = {n: evidence.read(site_id, n, d, "layers" if n in ("vert_vel_cm_yr", "tilt_years_500", "accel_cm_yr2") else "evidence")
                     for n in ("vert_vel_cm_yr", "tilt_years_500", "accel_cm_yr2", "fit_se_cm_yr", "mean_coherence")}
+    elif m["lens"] == "earthquake":
+        ev = evidence.earthquake(site_id, m, site, log)
+        d = ev["date"]
+        ctx["E"] = {n: evidence.read(site_id, n, d, "layers" if n in ("strain_cm_km", "post_vel_cm_month") else "evidence")
+                    for n in ("strain_cm_km", "post_vel_cm_month", "post_coherence", "damage_class", "slope80")}
+        ctx["damage_source"] = ev["stats"]["damage_source"]
     elif m["lens"] == "wildfire":
         ev = evidence.wildfire(site_id, m, site, log)
         ctx["A"] = ev["arrays"]
@@ -851,6 +1049,7 @@ def build(site_id: str, log=print) -> int:
     else:
         raise RuntimeError(f"No evidence step for the {m['lens']} Lens yet")
     ctx["geo"] = Geo(ev["grid"])
+    ctx["ev_stats"] = ev["stats"]
     date = ev["date"]
     ctx["date"] = date
     for kind in sorted({k for q in qs for k in q.get("context", [])} | {"places"}):
@@ -965,6 +1164,13 @@ def _nearest_item(site_id: str, qid: str, lon: float, lat: float, max_m: float):
     return (items[j], float(d[j])) if d[j] <= max_m else (None, float(d[j]))
 
 
+def _measure(label: str, value: float, unit: str, marks: list[tuple[float, str]], worse: str = "higher", top: float | None = None) -> dict:
+    """The number behind an answer, with the Question's thresholds as marks, for a gauge on the spot card."""
+    hi = max([m[0] for m in marks] + [value]) * 1.25
+    return {"label": label, "value": round(float(value), 1), "unit": unit, "worse": worse,
+            "max": round(float(top if top is not None else hi), 1), "marks": [{"at": float(a), "label": t} for a, t in marks]}
+
+
 def _explain_subsidence(v: dict, q: dict) -> list[str]:
     T, out = q["thresholds"], []
     if not np.isfinite(v["vel"]):
@@ -982,6 +1188,52 @@ def _explain_subsidence(v: dict, q: dict) -> list[str]:
         out.append(f"Slope of {v['slope']:.0f} degrees: the radar tilt is not reliable on hillsides, so a slope-stability check is needed instead.")
     if "accel_cm_yr2" in T and np.isfinite(v["acc"]) and v["acc"] < -T["accel_cm_yr2"]:
         out.append(f"First sign of sinking speeding up ({v['acc']:.0f} cm/year each year); confirm with next year's data.")
+    return out
+
+
+def _explain_earthquake(site_id: str, recipe: str, v: dict, q: dict, lon: float, lat: float, card: dict, doc: dict) -> list[str]:
+    """The numbers behind an earthquake answer at one spot; sets card["measure"] where one number explains it."""
+    T = q["thresholds"]
+    fin = lambda k: np.isfinite(v.get(k, np.nan))
+    out = []
+    if recipe == "inspect_first":
+        src = "the AI Model" if doc.get("evidence", {}).get("damage_source") == "pred_earthquake" else "the coherence-loss rule"
+        if fin("dmg"):
+            out.append(f"Damage likelihood here is {['low', 'elevated', 'high'][int(v['dmg'])]}, from {src} on 250 m Neighbourhoods. "
+                       "It ranks where to look; it does not see inside buildings.")
+        else:
+            out.append("No damage estimate here (water, or outside the analysed area).")
+    elif recipe == "rebuild_where":
+        if fin("strain"):
+            out.append(f"The earthquake bent the ground here by about {v['strain']:.1f} cm per km (line of sight, smoothed over 400 m); "
+                       f"a site study starts at {T['amber_cm_km']:g} and a special study at {T['red_cm_km']:g}.")
+            card["measure"] = _measure("Ground bent by the quake", v["strain"], "cm/km", [(T["amber_cm_km"], "site study"), (T["red_cm_km"], "special study")])
+        else:
+            out.append("The radar lost the signal here during the earthquake (often right on the fault, in dense vegetation or where the ground broke).")
+        if fin("slope") and v["slope"] >= T["steep_deg"]:
+            out.append(f"The slope is {v['slope']:.0f} degrees: shaken steep ground with damage signs can slide in later rain or aftershocks.")
+    elif recipe == "still_moving":
+        if fin("vel"):
+            out.append(f"Since the earthquake the ground here moves about {abs(v['vel']):.1f} cm a month {'away from' if v['vel'] < 0 else 'toward'} the satellite.")
+            card["measure"] = _measure("Still moving", abs(v["vel"]), "cm/month", [(T["amber_cm_month"], "slow"), (T["red_cm_month"], "moving")])
+            if fin("coh") and v["coh"] < T["min_coherence"]:
+                out.append(f"The radar signal after the quake is weak here (coherence {v['coh']:.2f}), so this speed is not reliable.")
+        else:
+            out.append("Not enough reliable Passes after the earthquake to measure a speed here.")
+    elif recipe == "lifelines_crossed":
+        it, dist = _nearest_item(site_id, q["id"], lon, lat, 200)
+        if it:
+            bits = [f"bent by {it['strain_cm_km']:.1f} cm/km" if it.get("strain_cm_km") is not None else None,
+                    f"still moving {it['speed_cm_month']:.1f} cm/month" if it.get("speed_cm_month") is not None else None]
+            out.append(f"Nearest flagged section: {it['kind']} {it['name']}, {dist:.0f} m away; its ground was " + " and ".join(b for b in bits if b) + ".")
+            cl = next(c for c in q["classes"] if c["value"] == it["class"])
+            card.update({"class": cl["value"], "label": cl["label"], "verdict": cl["verdict"], "color": cl["color"], "solutions": cl["solutions"]})
+            if it.get("strain_cm_km") is not None:
+                card["measure"] = _measure("Ground bent under it", it["strain_cm_km"], "cm/km", [(T["amber_cm_km"], "check"), (T["red_cm_km"], "inspect")])
+        else:
+            card.update({"class": None, "label": "No flagged road or line here", "verdict": None, "color": None, "solutions": []})
+            card["reasons"] = []
+            out.append("No road, Metro or canal section within 200 m crosses ground that was torn or keeps moving.")
     return out
 
 
@@ -1012,9 +1264,14 @@ def at_point(site_id: str, lon: float, lat: float) -> dict:
                 "burned_up": _value_at(site_id, f"{Ev}burned_upstream_ha_{d}.tif", lon, lat), "edge": _value_at(site_id, f"{Ev}edge_upstream_{d}.tif", lon, lat),
                 "dhv": _value_at(site_id, f"{Ev}dhv60_{d}.tif", lon, lat), "dhh": _value_at(site_id, f"{Ev}dhh60_{d}.tif", lon, lat),
                 "outlet": _value_at(site_id, f"{Ev}a7_outlet_{d}.tif", lon, lat)}
+    elif doc["lens"] == "earthquake":
+        L, Ev = f"{site_id}/layers/", f"{site_id}/evidence/"
+        vals = {"strain": _value_at(site_id, f"{L}strain_cm_km_{d}.tif", lon, lat), "vel": _value_at(site_id, f"{L}post_vel_cm_month_{d}.tif", lon, lat),
+                "coh": _value_at(site_id, f"{Ev}post_coherence_{d}.tif", lon, lat), "dmg": _value_at(site_id, f"{Ev}damage_class_{d}.tif", lon, lat),
+                "slope": _value_at(site_id, f"{Ev}slope80_{d}.tif", lon, lat)}
     for q in doc["questions"]:
         qf = qfiles[q["id"]]
-        card = {"question": q["id"], "title": q["title"], "class": None, "label": None, "verdict": None, "color": None, "reasons": [], "solutions": []}
+        card = {"question": q["id"], "title": q["title"], "topic": qf.get("topic"), "class": None, "label": None, "verdict": None, "color": None, "reasons": [], "solutions": []}
         cls = None
         if q["layer"]:
             cv = _value_at(site_id, f"{site_id}/layers/{q['layer']}_{d}.tif", lon, lat)
@@ -1025,6 +1282,10 @@ def at_point(site_id: str, lon: float, lat: float) -> dict:
         recipe = qf["recipe"]
         if recipe in ("safe_to_build", "what_to_build"):
             card["reasons"] += _explain_subsidence(vals, qf)
+            T = qf["thresholds"]
+            if np.isfinite(vals.get("vel", np.nan)) and vals["vel"] < 0 and "amber_speed_cm_yr" in T:
+                marks = [(T["amber_speed_cm_yr"], "with conditions")] + ([(T["red_speed_cm_yr"], "avoid")] if "red_speed_cm_yr" in T else [])
+                card["measure"] = _measure("Sinking speed", -vals["vel"], "cm/yr", marks)
         elif recipe == "better_plots":
             card.update(_better_plots_at(site_id, doc, qf, lon, lat))
         elif recipe == "lines_at_risk":
@@ -1034,16 +1295,45 @@ def at_point(site_id: str, lon: float, lat: float) -> dict:
                                        f"reaches 1/500 in about {it['years_500']:.0f} years.")
                 cl = next(c for c in qf["classes"] if c["value"] == it["class"])
                 card.update({"class": cl["value"], "label": cl["label"], "verdict": cl["verdict"], "color": cl["color"], "solutions": cl["solutions"]})
+                T = qf["thresholds"]
+                card["measure"] = _measure("Years to the 1/500 crack limit", min(it["years_500"], 100), "years",
+                                           [(T["red_years"], "act"), (T["amber_years"], "watch")], worse="lower", top=100)
             else:
                 card["reasons"] = ["No mapped Metro, rail or canal line within 200 m of this spot."]
                 card.update({"class": None, "label": "No line here", "verdict": None, "color": None, "solutions": []})
+        elif recipe in ("inspect_first", "rebuild_where", "still_moving", "lifelines_crossed"):
+            card["reasons"] += _explain_earthquake(site_id, recipe, vals, qf, lon, lat, card, doc)
         elif recipe in ("burned_slopes", "replant_first", "forest_recovery", "roads_to_watch", "farms_burned", "mud_to_water", "since_last_pass"):
             extra = _explain_wildfire(site_id, recipe, vals, qf, lon, lat, card)  # may replace card["reasons"]
             card["reasons"] = card["reasons"] + extra
         if not card["label"]:
             card["label"] = "Nothing to flag here" if recipe not in ("better_plots",) else card.get("label")
         cards.append(card)
-    return {"lon": lon, "lat": lat, "date": d, "cards": cards, "values": {k: (None if not np.isfinite(v) else round(v, 3)) for k, v in vals.items()}}
+    return {"lon": lon, "lat": lat, "date": d, "place": nearest_place(site_id, lon, lat), "cards": cards,
+            "values": {k: (None if not np.isfinite(v) else round(v, 3)) for k, v in vals.items()}}
+
+
+def nearest_place(site_id: str, lon: float, lat: float) -> dict | None:
+    """The nearest named place to a spot (cached OpenStreetMap places): its name, distance and direction from it."""
+    key = f"{site_id}/context/places.geojson"
+    if not config.data.exists(key):
+        return None
+    best = None
+    k = np.cos(np.radians(lat))
+    for f in json.loads(config.data.read_text(key))["features"]:
+        name = f["properties"].get("name")
+        if not name or f["geometry"]["type"] != "Point":
+            continue
+        plon, plat = f["geometry"]["coordinates"][:2]
+        dx, dy = (lon - plon) * 111.32 * k, (lat - plat) * 110.57
+        dist = float(np.hypot(dx, dy))
+        if best is None or dist < best["km"]:
+            best = {"name": name, "local": f["properties"].get("name_local") or "", "kind": f["properties"].get("class", ""), "km": dist, "dx": dx, "dy": dy}
+    if best is None:
+        return None
+    words = ["east", "north-east", "north", "north-west", "west", "south-west", "south", "south-east"]
+    d = words[int(((np.degrees(np.arctan2(best["dy"], best["dx"])) + 22.5) % 360) // 45)]
+    return {"name": best["name"], "local": best["local"], "kind": best["kind"], "km": round(best["km"], 1), "direction": d}
 
 
 def _better_plots_at(site_id: str, doc: dict, q: dict, lon: float, lat: float) -> dict:
@@ -1092,6 +1382,7 @@ def _explain_wildfire(site_id: str, recipe: str, v: dict, q: dict, lon: float, l
             out.append(f"{v['steep'] * 100:.0f}% of this 60 m cell is burned ground on slopes of {T['steep_deg']:.0f} degrees or more.")
         if np.isfinite(v["drain"]) and v["drain"] >= T["channel_ha"]:
             share = v["up"] / v["drain"] * 100 if v["drain"] else 0
+            card["measure"] = _measure("Basin burned and steep", share, "%", [(T["path_share"] * 100, "mud path"), (T["high_share"] * 100, "main path")], top=100)
             big = " (a large river: it carries sediment floods rather than starting debris flows)" if v["drain"] > T["max_basin_ha"] else ""
             out.append(f"It is a channel: {v['drain']:,.0f} ha drain through it, {share:.0f}% of them burned steep ground{big}.")
         it, dist = _nearest_item(site_id, q["id"], lon, lat, 3000)
@@ -1101,6 +1392,7 @@ def _explain_wildfire(site_id: str, recipe: str, v: dict, q: dict, lon: float, l
                 card.update({"class": cl["value"], "label": cl["label"], "verdict": cl["verdict"], "color": cl["color"], "solutions": cl["solutions"]})
                 card["reasons"] = [cl["meaning"]]
             kind = "a main mud path" if it["class"] == 3 else "a mud path"
+            card["measure"] = _measure("Basin burned and steep", it["basin_share"], "%", [(T["path_share"] * 100, "mud path"), (T["high_share"] * 100, "main path")], top=100)
             out = []  # the cell under the village pin says little; the village's own exposure does
             out.append(f"{it['name']} lies within {T['village_radius_m']:.0f} m of {kind}: {it['basin_share']}% of that channel's basin is burned and steep "
                        f"({it['upstream_ha']:.0f} ha).")
@@ -1125,6 +1417,8 @@ def _explain_wildfire(site_id: str, recipe: str, v: dict, q: dict, lon: float, l
     elif recipe == "forest_recovery":
         if np.isfinite(v["rec"]):
             out.append(f"{max(v['rec'], 0) * 100:.0f}% of the vegetation signal (HV) lost in the fire has returned since its post-fire low.")
+            card["measure"] = _measure("Lost vegetation signal back", max(v["rec"], 0) * 100, "%", [(T["slow"] * 100, "slow"), (T["recovering"] * 100, "coming back")],
+                                       worse="lower", top=max(100, max(v["rec"], 0) * 100))
         else:
             out.append("Not a burned forest block with a clear drop in the fire.")
     elif recipe == "farms_burned":
@@ -1152,10 +1446,12 @@ def _explain_wildfire(site_id: str, recipe: str, v: dict, q: dict, lon: float, l
             n = int(v["outlet"])
             if 1 <= n <= len(items):
                 it = items[n - 1]
+                card["measure"] = _measure(f"{it['name']}: catchment burned and steep", it["steep_pct"], "%", [(T["low_share"] * 100, "some"), (T["high_share"] * 100, "heavy")])
                 out.append(f"Rain falling here ends up in {it['name']} ({it['kind']}), whose catchment is {it['steep_pct']:.0f}% burned steep ground"
                            + (" in the part on the map." if it.get("partial") else "."))
     elif recipe == "since_last_pass":
         if np.isfinite(v["dhv"]):
+            card["measure"] = _measure("Vegetation signal change", abs(v["dhv"]), "dB", [(T["change_db"], "a real change")])
             out.append(f"Since the previous Pass the vegetation signal (HV) changed by {v['dhv']:+.1f} dB and the surface signal (HH) by {v['dhh']:+.1f} dB; "
                        f"changes under {T['change_db']:.0f} dB are within the radar's usual Pass-to-Pass noise.")
         else:
